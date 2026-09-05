@@ -5,15 +5,15 @@ declare global {
   var mysqlPool: mysql.Pool | undefined;
 }
 
-// Global singleton pool to prevent connection exhaustion in Next.js serverless and dev environments
+// Global singleton pool for Next.js serverless and development environments
 export const pool =
   globalThis.mysqlPool ||
   mysql.createPool({
-    host: process.env.DB_HOST,
+    host: process.env.DB_HOST || 'mysql-1a238f5c-mail-ffb3.i.aivencloud.com',
     port: Number(process.env.DB_PORT) || 22717,
-    user: process.env.DB_USER,
+    user: process.env.DB_USER || 'avnadmin',
     password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
+    database: process.env.DB_NAME || 'myfinbook_db',
     ssl: {
       rejectUnauthorized: false,
     },
@@ -21,14 +21,12 @@ export const pool =
     keepAliveInitialDelay: 10000,
     connectTimeout: 10000,
     waitForConnections: true,
-    connectionLimit: 10,
+    connectionLimit: 5,
     maxIdle: 5,
     idleTimeout: 60000,
     queueLimit: 0,
   });
 
-if (process.env.NODE_ENV !== 'production') {
-  globalThis.mysqlPool = pool;
-}
+globalThis.mysqlPool = pool;
 
 export default pool;
