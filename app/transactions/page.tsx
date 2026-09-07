@@ -188,9 +188,56 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* Transactions Table */}
+      {/* Transactions Container */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile View: Native Card List */}
+        <div className="sm:hidden divide-y divide-slate-100">
+          {filteredTransactions.length === 0 ? (
+            <div className="py-12 text-center text-xs text-slate-400">
+              No transactions match the selected filters.
+            </div>
+          ) : (
+            filteredTransactions.map((tx: PersonalTransaction) => (
+              <div key={tx.id} className="p-3.5 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-bold ${
+                    tx.type === 'INCOME' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-700'
+                  }`}>
+                    {tx.type === 'INCOME' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-slate-900 truncate">{tx.category}</div>
+                    <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                      <span className="font-mono">{tx.date}</span>
+                      {tx.paymentMode && <span>• {tx.paymentMode}</span>}
+                    </div>
+                    {tx.notes && <div className="text-[11px] text-slate-500 truncate mt-0.5">{tx.notes}</div>}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 text-right">
+                  <div className={`text-xs font-bold font-mono ${
+                    tx.type === 'INCOME' ? 'text-blue-700' : 'text-slate-900'
+                  }`}>
+                    {tx.type === 'INCOME' ? '+' : '-'} {formatCurrency(tx.amount, profile.currencySymbol)}
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (confirm('Delete this transaction?')) deleteTransaction(tx.id);
+                    }}
+                    className="p-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition"
+                    title="Delete"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Desktop View: Table */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/60 text-[11px] font-bold text-slate-400 uppercase tracking-wider">

@@ -51,10 +51,10 @@ export default function Header({ onOpenQuickAdd, onOpenSearch }: HeaderProps) {
     : 'U';
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur md:px-6 no-print">
+    <header className="sticky top-0 z-30 flex min-h-16 h-[calc(4rem+env(safe-area-inset-top,0px))] pt-[env(safe-area-inset-top,0px)] w-full items-center justify-between border-b border-slate-200/80 bg-white/95 px-3.5 sm:px-6 backdrop-blur-md no-print select-none">
       {/* Left: Brand / Profile Info & Search */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-1.5">
+      <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/90 px-2.5 sm:px-3 py-1.5 shadow-2xs">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-white font-bold text-xs shadow-sm">
             {initials}
           </div>

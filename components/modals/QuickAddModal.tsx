@@ -141,14 +141,17 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
-      <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
+      <div className="relative w-full max-w-md rounded-t-3xl sm:rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
+        {/* Mobile Drag Indicator Handle */}
+        <div className="sm:hidden mx-auto -mt-1 mb-3.5 h-1.5 w-12 rounded-full bg-slate-200" />
+
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <h3 className="text-base font-bold text-slate-900">Add New Entry</h3>
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+            className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
           >
             <X size={18} />
           </button>
@@ -211,6 +214,7 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
                 <label className="block font-semibold text-slate-700">Amount (₹) *</label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   step="0.01"
                   required
                   autoFocus
