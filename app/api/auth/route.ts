@@ -19,6 +19,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, data: rows[0] });
     }
 
+    // Clean up any legacy demo sample user
+    try {
+      await pool.query(
+        `DELETE FROM users WHERE id = 'user-sample' OR LOWER(name) LIKE '%althaf%' OR LOWER(name) LIKE '%altaf%'`
+      );
+    } catch {}
+
     const [rows]: any = await pool.query(
       `SELECT id, name, email, password_hash as password, role, status, currency, currency_symbol as currencySymbol, created_at as createdAt 
        FROM users 
@@ -60,11 +67,9 @@ export async function POST(request: Request) {
       const user = rows[0];
       const isDefaultAdminMatch =
         (user.email.toLowerCase() === 'admin@myfinbook.com' || user.id === 'user-admin') && password === 'admin123';
-      const isDefaultUserMatch =
-        (user.email.toLowerCase() === 'user@myfinbook.com' || user.id === 'user-sample') && password === 'user123';
       const isDirectMatch = user.password === password || user.password === '$2y$10$hashed_password_here';
 
-      if (!isDirectMatch && !isDefaultAdminMatch && !isDefaultUserMatch) {
+      if (!isDirectMatch && !isDefaultAdminMatch) {
         return NextResponse.json(
           { success: false, error: 'Incorrect password. Please try again.' },
           { status: 401 }

@@ -43,8 +43,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (savedUserStr) {
       try {
         const parsed = JSON.parse(savedUserStr);
-        if (parsed && parsed.id && parsed.status === 'ACTIVE') {
+        if (
+          parsed &&
+          parsed.id &&
+          parsed.id !== 'user-sample' &&
+          !parsed.name.toLowerCase().includes('althaf') &&
+          !parsed.name.toLowerCase().includes('altaf') &&
+          parsed.status === 'ACTIVE'
+        ) {
           initialUser = parsed;
+        } else {
+          localStorage.removeItem('myfinbook_session_user');
+          localStorage.removeItem('myfinbook_session_user_id');
         }
       } catch {}
     }
@@ -53,14 +63,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (savedUsersStr) {
       try {
         const parsed = JSON.parse(savedUsersStr);
-        if (Array.isArray(parsed) && parsed.length > 0) loadedUsers = parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          loadedUsers = parsed.filter(
+            (u: any) =>
+              u.id !== 'user-sample' &&
+              !u.name?.toLowerCase().includes('althaf') &&
+              !u.name?.toLowerCase().includes('altaf')
+          );
+        }
       } catch {}
     }
     setUsers(loadedUsers);
 
     if (initialUser) {
       setCurrentUser(initialUser);
-    } else if (savedSessionUserId) {
+    } else if (savedSessionUserId && savedSessionUserId !== 'user-sample') {
       const matching = loadedUsers.find((u) => u.id === savedSessionUserId);
       if (matching && matching.status === 'ACTIVE') {
         initialUser = matching;
@@ -86,12 +103,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (res.ok && isMounted) {
           const json = await res.json();
           if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-            setUsers(json.data);
-            localStorage.setItem('myfinbook_system_users', JSON.stringify(json.data));
+            const cleanUsers = json.data.filter(
+              (u: any) =>
+                u.id !== 'user-sample' &&
+                !u.name?.toLowerCase().includes('althaf') &&
+                !u.name?.toLowerCase().includes('altaf')
+            );
+            setUsers(cleanUsers);
+            localStorage.setItem('myfinbook_system_users', JSON.stringify(cleanUsers));
 
             const currentSessionId = localStorage.getItem('myfinbook_session_user_id');
-            if (currentSessionId) {
-              const matched = json.data.find((u: UserAccount) => u.id === currentSessionId);
+            if (currentSessionId && currentSessionId !== 'user-sample') {
+              const matched = cleanUsers.find((u: UserAccount) => u.id === currentSessionId);
               if (matched && matched.status === 'ACTIVE') {
                 setCurrentUser(matched);
                 localStorage.setItem('myfinbook_session_user', JSON.stringify(matched));

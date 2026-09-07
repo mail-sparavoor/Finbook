@@ -49,8 +49,8 @@ export const DEFAULT_PAYMENT_MODES = [
 ];
 
 export const SEED_PROFILE: PersonalProfile = {
-  name: 'Althaf Sparavoor',
-  email: 'althaf@personal.me',
+  name: 'User',
+  email: '',
   currency: 'INR',
   currencySymbol: '₹',
 };
@@ -233,17 +233,6 @@ export const SEED_USERS: UserAccount[] = [
     email: 'admin@myfinbook.com',
     password: 'admin123',
     role: 'ADMIN',
-    status: 'ACTIVE',
-    currency: 'INR',
-    currencySymbol: '₹',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'user-sample',
-    name: 'Althaf Sparavoor',
-    email: 'user@myfinbook.com',
-    password: 'user123',
-    role: 'USER',
     status: 'ACTIVE',
     currency: 'INR',
     currencySymbol: '₹',
