@@ -30,17 +30,44 @@ import {
 export default function PersonalDashboardPage() {
   const { profile, metrics, transactions, dues, budgets } = usePersonalFinance();
 
-  const currentMonthName = useMemo(() => {
-    return new Date().toLocaleString('default', { month: 'short' });
-  }, []);
+  // Monthly cash flow trend - calculated dynamically from user's recorded transactions
+  const monthlyData = useMemo(() => {
+    if (!transactions || transactions.length === 0) {
+      const currentMonth = new Date().toLocaleString('default', { month: 'short' });
+      return [{ name: currentMonth, income: 0, expense: 0 }];
+    }
 
-  // Monthly cash flow trend
-  const monthlyData = [
-    { name: 'Jun', income: 75000, expense: 48000 },
-    { name: 'Jul', income: 90000, expense: 52000 },
-    { name: 'Aug', income: 82000, expense: 49000 },
-    { name: `${currentMonthName}`, income: metrics.monthlyIncome, expense: metrics.monthlyExpenses },
-  ];
+    const monthMap: Record<string, { name: string; income: number; expense: number }> = {};
+
+    transactions.forEach((t: PersonalTransaction) => {
+      if (!t.date) return;
+      const monthKey = t.date.slice(0, 7); // "YYYY-MM"
+      if (!monthKey || monthKey.length < 7) return;
+
+      if (!monthMap[monthKey]) {
+        const [yearStr, monthStr] = monthKey.split('-');
+        const dateObj = new Date(parseInt(yearStr, 10), parseInt(monthStr, 10) - 1, 1);
+        const name = isNaN(dateObj.getTime())
+          ? monthKey
+          : dateObj.toLocaleString('default', { month: 'short' });
+        monthMap[monthKey] = { name, income: 0, expense: 0 };
+      }
+
+      if (t.type === 'INCOME') {
+        monthMap[monthKey].income += t.amount;
+      } else if (t.type === 'EXPENSE') {
+        monthMap[monthKey].expense += t.amount;
+      }
+    });
+
+    const sortedKeys = Object.keys(monthMap).sort();
+    if (sortedKeys.length === 0) {
+      const currentMonth = new Date().toLocaleString('default', { month: 'short' });
+      return [{ name: currentMonth, income: 0, expense: 0 }];
+    }
+
+    return sortedKeys.map((key) => monthMap[key]);
+  }, [transactions]);
 
   // Category expense breakdown
   const categoryData = useMemo(() => {

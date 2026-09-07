@@ -17,12 +17,56 @@ import {
 export default function PersonalReportsPage() {
   const { profile, metrics, transactions } = usePersonalFinance();
 
+  // Derive only months for which figures/transactions have been added
+  const availableMonths = useMemo(() => {
+    const monthsMap = new Map<string, string>();
+    transactions.forEach((t: PersonalTransaction) => {
+      if (t.date && t.date.length >= 7) {
+        const monthKey = t.date.slice(0, 7); // e.g. "2026-09"
+        if (!monthsMap.has(monthKey)) {
+          const [yearStr, monthStr] = monthKey.split('-');
+          const dateObj = new Date(parseInt(yearStr, 10), parseInt(monthStr, 10) - 1, 1);
+          const label = !isNaN(dateObj.getTime())
+            ? dateObj.toLocaleString('default', { month: 'long', year: 'numeric' })
+            : monthKey;
+          monthsMap.set(monthKey, label);
+        }
+      }
+    });
+
+    const sortedKeys = Array.from(monthsMap.keys()).sort().reverse();
+    return sortedKeys.map((key) => ({
+      key,
+      label: monthsMap.get(key)!,
+    }));
+  }, [transactions]);
+
   const currentMonth = new Date().toISOString().slice(0, 7);
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
+
+  const activeMonth = useMemo(() => {
+    if (selectedMonth && availableMonths.some((m) => m.key === selectedMonth)) {
+      return selectedMonth;
+    }
+    if (availableMonths.length > 0) {
+      return availableMonths[0].key;
+    }
+    return currentMonth;
+  }, [selectedMonth, availableMonths, currentMonth]);
+
+  const activeMonthLabel = useMemo(() => {
+    const match = availableMonths.find((m) => m.key === activeMonth);
+    if (match) return match.label;
+    const [yearStr, monthStr] = activeMonth.split('-');
+    const dateObj = new Date(parseInt(yearStr, 10), parseInt(monthStr, 10) - 1, 1);
+    return !isNaN(dateObj.getTime())
+      ? dateObj.toLocaleString('default', { month: 'long', year: 'numeric' })
+      : activeMonth;
+  }, [availableMonths, activeMonth]);
 
   const monthTransactions = useMemo(() => {
-    return transactions.filter((t: PersonalTransaction) => t.date.startsWith(selectedMonth));
-  }, [transactions, selectedMonth]);
+    return transactions.filter((t: PersonalTransaction) => t.date.startsWith(activeMonth));
+  }, [transactions, activeMonth]);
 
   const monthIncome = useMemo(() => {
     return monthTransactions.filter((t: PersonalTransaction) => t.type === 'INCOME').reduce((s: number, t: PersonalTransaction) => s + t.amount, 0);
@@ -70,7 +114,7 @@ export default function PersonalReportsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Personal_Statement_${selectedMonth}.csv`;
+    link.download = `Personal_Statement_${activeMonth}.csv`;
     link.click();
     link.remove();
   };
@@ -102,18 +146,27 @@ export default function PersonalReportsPage() {
         </div>
       </div>
 
-      {/* Month Selector */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm flex items-center justify-between no-print">
+      {/* Month Selector - Displaying only months for which figures are added */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print">
         <div className="flex items-center gap-2">
           <Calendar size={16} className="text-blue-600" />
-          <span className="text-xs font-bold text-slate-700">Select Month:</span>
+          <span className="text-xs font-bold text-slate-700">Statement Period:</span>
         </div>
-        <input
-          type="month"
-          value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
-          className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-900 focus:border-blue-600 focus:outline-none"
-        />
+        {availableMonths.length > 0 ? (
+          <select
+            value={activeMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-900 focus:border-blue-600 focus:outline-none"
+          >
+            {availableMonths.map((m) => (
+              <option key={m.key} value={m.key}>
+                {m.label} ({m.key})
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="text-xs font-medium text-slate-400 italic">No transaction months recorded yet</span>
+        )}
       </div>
 
       {/* Printable Statement Document */}
@@ -123,7 +176,7 @@ export default function PersonalReportsPage() {
           <div>
             <div className="text-xl font-bold text-blue-900">Personal Cash Flow Statement</div>
             <div className="text-xs text-slate-500 mt-0.5">
-              Account Holder: <strong>{profile.name}</strong> • Period: <strong>{selectedMonth}</strong>
+              Account Holder: <strong>{profile.name}</strong> • Period: <strong>{activeMonthLabel} ({activeMonth})</strong>
             </div>
           </div>
           <div className="text-right text-xs text-slate-500">
