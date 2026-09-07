@@ -40,22 +40,41 @@
       "short_name": "Add Tx",
       "description": "Record a new income or expense entry",
       "url": "/transactions?action=add",
-      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon.svg",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Dues & Khatabook",
       "short_name": "Dues",
       "description": "View lending and borrowing balance",
       "url": "/dues",
-      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon.svg",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Monthly Budgets",
       "short_name": "Budgets",
       "description": "Check your category budgets",
       "url": "/budgets",
-      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon.svg",
+          "sizes": "192x192"
+        }
+      ]
     }
   ],
-  "categories": ["finance", "productivity", "utilities"]
+  "categories": [
+    "finance",
+    "productivity",
+    "utilities"
+  ]
 }

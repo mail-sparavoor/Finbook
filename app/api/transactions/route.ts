@@ -106,6 +106,113 @@ export async function POST(request: Request) {
   }
 }
 
+// PUT: Update an existing transaction
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+    const {
+      id,
+      date,
+      type,
+      category,
+      amount,
+      paymentMode,
+      personId,
+      personName,
+      accountId,
+      notes,
+    } = body;
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'Transaction ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (date !== undefined) {
+      updates.push('date = ?');
+      values.push(date);
+    }
+    if (type !== undefined) {
+      updates.push('type = ?');
+      values.push(type);
+    }
+    if (category !== undefined) {
+      updates.push('category = ?');
+      values.push(category);
+    }
+    if (amount !== undefined && !isNaN(Number(amount))) {
+      updates.push('amount = ?');
+      values.push(Number(amount));
+    }
+    if (paymentMode !== undefined) {
+      updates.push('payment_mode = ?');
+      values.push(paymentMode);
+    }
+    if (personId !== undefined) {
+      updates.push('person_id = ?');
+      values.push(personId);
+    }
+    if (personName !== undefined) {
+      updates.push('person_name = ?');
+      values.push(personName);
+    }
+    if (accountId !== undefined) {
+      updates.push('account_id = ?');
+      values.push(accountId);
+    }
+    if (notes !== undefined) {
+      updates.push('notes = ?');
+      values.push(notes);
+    }
+
+    if (updates.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'No fields provided to update' },
+        { status: 400 }
+      );
+    }
+
+    values.push(id);
+
+    await pool.query(
+      `UPDATE transactions SET ${updates.join(', ')} WHERE id = ?`,
+      values
+    );
+
+    const [rows]: any = await pool.query(
+      `SELECT 
+        id, 
+        user_id as userId, 
+        DATE_FORMAT(date, '%Y-%m-%d') as date, 
+        type, 
+        category, 
+        CAST(amount AS DECIMAL(10,2)) as amount, 
+        payment_mode as paymentMode, 
+        person_id as personId, 
+        person_name as personName, 
+        account_id as accountId, 
+        notes, 
+        created_at as createdAt 
+       FROM transactions 
+       WHERE id = ?`,
+      [id]
+    );
+
+    return NextResponse.json({ success: true, data: rows[0] });
+  } catch (error: any) {
+    console.error('Error updating transaction:', error);
+    return NextResponse.json(
+      { success: false, error: error.message || 'Failed to update transaction' },
+      { status: 500 }
+    );
+  }
+}
+
 // DELETE: Remove a transaction
 export async function DELETE(request: Request) {
   try {

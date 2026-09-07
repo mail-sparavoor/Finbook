@@ -99,11 +99,22 @@ export async function POST(request: Request) {
   }
 }
 
-// PUT: Update an existing due (e.g. record repayment, partial payment)
+// PUT: Update an existing due
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { id, paidAmount, notes, status } = body;
+    const {
+      id,
+      personId,
+      personName,
+      phone,
+      type,
+      originalAmount,
+      paidAmount,
+      dueDate,
+      notes,
+      status,
+    } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'Due ID is required' }, { status: 400 });
@@ -112,9 +123,33 @@ export async function PUT(request: Request) {
     const updates: string[] = [];
     const values: any[] = [];
 
-    if (paidAmount !== undefined) {
+    if (personId !== undefined) {
+      updates.push('person_id = ?');
+      values.push(personId);
+    }
+    if (personName !== undefined) {
+      updates.push('person_name = ?');
+      values.push(personName.trim());
+    }
+    if (phone !== undefined) {
+      updates.push('phone = ?');
+      values.push(phone);
+    }
+    if (type !== undefined) {
+      updates.push('type = ?');
+      values.push(type);
+    }
+    if (originalAmount !== undefined && !isNaN(Number(originalAmount))) {
+      updates.push('original_amount = ?');
+      values.push(Number(originalAmount));
+    }
+    if (paidAmount !== undefined && !isNaN(Number(paidAmount))) {
       updates.push('paid_amount = ?');
       values.push(Number(paidAmount));
+    }
+    if (dueDate !== undefined) {
+      updates.push('due_date = ?');
+      values.push(dueDate);
     }
     if (notes !== undefined) {
       updates.push('notes = ?');

@@ -53,6 +53,7 @@ interface PersonalContextType {
     date?: string;
     notes?: string;
   }) => void;
+  updateTransaction: (id: string, data: Partial<PersonalTransaction>) => void;
   deleteTransaction: (id: string) => void;
 
   // Person Profiles & Contact Ledgers
@@ -74,6 +75,7 @@ interface PersonalContextType {
     dueDate?: string;
     notes?: string;
   }) => void;
+  updateDue: (id: string, data: Partial<PersonalDue>) => void;
   recordDuePayment: (dueId: string, amount: number, accountId?: string, notes?: string) => void;
   deleteDue: (id: string) => void;
 
@@ -374,6 +376,23 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     }).catch((err) => console.error('Failed to sync transaction to MySQL', err));
   };
 
+  const updateTransaction = (id: string, data: Partial<PersonalTransaction>) => {
+    setTransactions((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, ...data, amount: data.amount !== undefined ? round2(data.amount) : t.amount } : t))
+    );
+
+    fetch('/api/transactions', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id,
+        ...data,
+        amount: data.amount !== undefined ? round2(data.amount) : undefined,
+        userId,
+      }),
+    }).catch((err) => console.error('Failed to update transaction in MySQL', err));
+  };
+
   const deleteTransaction = (id: string) => {
     setTransactions((prev) => prev.filter((t) => t.id !== id));
 
@@ -491,6 +510,34 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     });
   };
 
+  const updateDue = (id: string, data: Partial<PersonalDue>) => {
+    setDues((prev) =>
+      prev.map((d) => {
+        if (d.id !== id) return d;
+        const updated = { ...d, ...data };
+        if (data.originalAmount !== undefined || data.paidAmount !== undefined) {
+          const orig = round2(data.originalAmount !== undefined ? Number(data.originalAmount) : d.originalAmount);
+          const paid = round2(data.paidAmount !== undefined ? Number(data.paidAmount) : d.paidAmount);
+          updated.originalAmount = orig;
+          updated.paidAmount = paid;
+          updated.remainingAmount = Math.max(0, round2(orig - paid));
+          updated.status = updated.remainingAmount === 0 ? 'SETTLED' : 'ACTIVE';
+        }
+        return updated;
+      })
+    );
+
+    fetch('/api/dues', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id,
+        ...data,
+        userId,
+      }),
+    }).catch((err) => console.error('Failed to update due in MySQL', err));
+  };
+
   const deleteDue = (id: string) => {
     setDues((prev) => prev.filter((d) => d.id !== id));
 
@@ -590,6 +637,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
         updateProfile,
         transactions,
         addTransaction,
+        updateTransaction,
         deleteTransaction,
         contacts,
         getOrCreateContact,
@@ -599,6 +647,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
         getPersonLedger,
         dues,
         addDue,
+        updateDue,
         recordDuePayment,
         deleteDue,
         budgets,

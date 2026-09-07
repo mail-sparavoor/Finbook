@@ -12,8 +12,10 @@ import {
   ArrowUpRight,
   Trash2,
   Download,
+  Edit2,
 } from 'lucide-react';
 import QuickAddModal from '@/components/modals/QuickAddModal';
+import EditTransactionModal from '@/components/modals/EditTransactionModal';
 
 export default function TransactionsPage() {
   const {
@@ -30,6 +32,7 @@ export default function TransactionsPage() {
   const [selectedPaymentMode, setSelectedPaymentMode] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<PersonalTransaction | null>(null);
 
   const allCategories = useMemo(() => {
     return Array.from(new Set([...incomeCategories, ...expenseCategories]));
@@ -92,7 +95,7 @@ export default function TransactionsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900">Personal Transactions</h1>
-          <p className="text-xs text-slate-500">Record and review your daily income and expense entries</p>
+          <p className="text-xs text-slate-500">Record, edit, and review your daily income and expense entries</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -221,15 +224,24 @@ export default function TransactionsPage() {
                   }`}>
                     {tx.type === 'INCOME' ? '+' : '-'} {formatCurrency(tx.amount, profile.currencySymbol)}
                   </div>
-                  <button
-                    onClick={() => {
-                      if (confirm('Delete this transaction?')) deleteTransaction(tx.id);
-                    }}
-                    className="p-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition"
-                    title="Delete"
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setEditingTransaction(tx)}
+                      className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
+                      title="Edit Transaction"
+                    >
+                      <Edit2 size={13} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirm('Delete this transaction?')) deleteTransaction(tx.id);
+                      }}
+                      className="p-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition"
+                      title="Delete"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))
@@ -285,15 +297,24 @@ export default function TransactionsPage() {
                       {formatCurrency(tx.amount, profile.currencySymbol)}
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => {
-                          if (confirm('Delete this transaction?')) deleteTransaction(tx.id);
-                        }}
-                        className="rounded p-1 text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
-                        title="Delete Transaction"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => setEditingTransaction(tx)}
+                          className="rounded p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
+                          title="Edit Transaction"
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm('Delete this transaction?')) deleteTransaction(tx.id);
+                          }}
+                          className="rounded p-1 text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
+                          title="Delete Transaction"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -306,6 +327,12 @@ export default function TransactionsPage() {
       <QuickAddModal
         isOpen={isAddOpen}
         onClose={() => setIsAddOpen(false)}
+      />
+
+      <EditTransactionModal
+        isOpen={!!editingTransaction}
+        transaction={editingTransaction}
+        onClose={() => setEditingTransaction(null)}
       />
     </div>
   );

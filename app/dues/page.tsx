@@ -22,8 +22,11 @@ import {
   Wallet,
   Clock,
   ArrowRight,
+  Edit2,
 } from 'lucide-react';
 import { PersonalDue, DueType, PersonContact, PersonalTransaction } from '@/lib/types';
+import EditDueModal from '@/components/modals/EditDueModal';
+import EditContactModal from '@/components/modals/EditContactModal';
 
 export default function DuesPage() {
   const {
@@ -49,6 +52,8 @@ export default function DuesPage() {
   const [isSettleOpen, setIsSettleOpen] = useState(false);
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const [selectedDue, setSelectedDue] = useState<PersonalDue | null>(null);
+  const [editingDue, setEditingDue] = useState<PersonalDue | null>(null);
+  const [editingContact, setEditingContact] = useState<PersonContact | null>(null);
 
   // New Person Form
   const [newPersonName, setNewPersonName] = useState('');
@@ -262,18 +267,16 @@ export default function DuesPage() {
           <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
             <button
               onClick={() => setMainView('PROFILES')}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
-                mainView === 'PROFILES' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
-              }`}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${mainView === 'PROFILES' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                }`}
             >
               <Users size={14} />
               <span>Person Profiles ({contacts.length})</span>
             </button>
             <button
               onClick={() => setMainView('MASTER_TABLE')}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
-                mainView === 'MASTER_TABLE' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
-              }`}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${mainView === 'MASTER_TABLE' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                }`}
             >
               <CreditCard size={14} />
               <span>All Dues Ledger ({dues.length})</span>
@@ -300,35 +303,31 @@ export default function DuesPage() {
             <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">
               <button
                 onClick={() => setProfileFilter('ALL')}
-                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                  profileFilter === 'ALL' ? 'bg-blue-100 text-blue-900 font-bold' : 'text-slate-500 hover:bg-slate-100'
-                }`}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${profileFilter === 'ALL' ? 'bg-blue-100 text-blue-900 font-bold' : 'text-slate-500 hover:bg-slate-100'
+                  }`}
               >
                 All People ({contacts.length})
               </button>
               <button
                 onClick={() => setProfileFilter('RECEIVABLE')}
-                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                  profileFilter === 'RECEIVABLE'
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${profileFilter === 'RECEIVABLE'
                     ? 'bg-blue-100 text-blue-900 font-bold'
                     : 'text-slate-500 hover:bg-slate-100'
-                }`}
+                  }`}
               >
                 You'll Get ({contactLedgers.filter((l: PersonLedger) => l.status === 'RECEIVABLE').length})
               </button>
               <button
                 onClick={() => setProfileFilter('PAYABLE')}
-                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                  profileFilter === 'PAYABLE' ? 'bg-slate-200 text-slate-900 font-bold' : 'text-slate-500 hover:bg-slate-100'
-                }`}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${profileFilter === 'PAYABLE' ? 'bg-slate-200 text-slate-900 font-bold' : 'text-slate-500 hover:bg-slate-100'
+                  }`}
               >
                 You'll Give ({contactLedgers.filter((l: PersonLedger) => l.status === 'PAYABLE').length})
               </button>
               <button
                 onClick={() => setProfileFilter('SETTLED')}
-                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                  profileFilter === 'SETTLED' ? 'bg-slate-200 text-slate-900 font-bold' : 'text-slate-500 hover:bg-slate-100'
-                }`}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${profileFilter === 'SETTLED' ? 'bg-slate-200 text-slate-900 font-bold' : 'text-slate-500 hover:bg-slate-100'
+                  }`}
               >
                 Settled / Nil ({contactLedgers.filter((l: PersonLedger) => l.status === 'SETTLED').length})
               </button>
@@ -379,6 +378,19 @@ export default function DuesPage() {
                           </div>
 
                           <div className="flex items-center gap-1">
+                            {ledger.contact && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingContact(ledger.contact);
+                                }}
+                                className="rounded-lg p-1.5 text-slate-300 hover:bg-blue-50 hover:text-blue-600 transition"
+                                title="Edit Person Profile"
+                              >
+                                <Edit2 size={13} />
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={(e) => {
@@ -402,13 +414,12 @@ export default function DuesPage() {
 
                         {/* Middle: Net Balance Banner */}
                         <div
-                          className={`mt-4 rounded-xl p-3 border ${
-                            isReceivable
+                          className={`mt-4 rounded-xl p-3 border ${isReceivable
                               ? 'border-blue-200 bg-blue-50/70 text-blue-950'
                               : isPayable
-                              ? 'border-slate-200 bg-slate-50 text-slate-900'
-                              : 'border-slate-100 bg-slate-50/50 text-slate-500'
-                          }`}
+                                ? 'border-slate-200 bg-slate-50 text-slate-900'
+                                : 'border-slate-100 bg-slate-50/50 text-slate-500'
+                            }`}
                         >
                           <div className="text-[10px] uppercase font-bold tracking-wider opacity-75">
                             {isReceivable ? "You'll Get" : isPayable ? "You'll Give" : 'Net Balance'}
@@ -456,33 +467,29 @@ export default function DuesPage() {
             <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
               <button
                 onClick={() => setMasterTab('ALL')}
-                className={`rounded-md px-3 py-1 text-xs font-semibold transition ${
-                  masterTab === 'ALL' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600'
-                }`}
+                className={`rounded-md px-3 py-1 text-xs font-semibold transition ${masterTab === 'ALL' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600'
+                  }`}
               >
                 All ({dues.length})
               </button>
               <button
                 onClick={() => setMasterTab('I_LENT')}
-                className={`rounded-md px-3 py-1 text-xs font-semibold transition ${
-                  masterTab === 'I_LENT' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600'
-                }`}
+                className={`rounded-md px-3 py-1 text-xs font-semibold transition ${masterTab === 'I_LENT' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600'
+                  }`}
               >
                 I Lent ({dues.filter((d: PersonalDue) => d.type === 'I_LENT' && d.status === 'ACTIVE').length})
               </button>
               <button
                 onClick={() => setMasterTab('I_BORROWED')}
-                className={`rounded-md px-3 py-1 text-xs font-semibold transition ${
-                  masterTab === 'I_BORROWED' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600'
-                }`}
+                className={`rounded-md px-3 py-1 text-xs font-semibold transition ${masterTab === 'I_BORROWED' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600'
+                  }`}
               >
                 I Borrowed ({dues.filter((d: PersonalDue) => d.type === 'I_BORROWED' && d.status === 'ACTIVE').length})
               </button>
               <button
                 onClick={() => setMasterTab('SETTLED')}
-                className={`rounded-md px-3 py-1 text-xs font-semibold transition ${
-                  masterTab === 'SETTLED' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600'
-                }`}
+                className={`rounded-md px-3 py-1 text-xs font-semibold transition ${masterTab === 'SETTLED' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600'
+                  }`}
               >
                 Settled / Cleared
               </button>
@@ -532,9 +539,8 @@ export default function DuesPage() {
 
                           <td className="py-3.5 px-4">
                             <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                isLent ? 'bg-blue-100 text-blue-900' : 'bg-slate-200 text-slate-800'
-                              }`}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${isLent ? 'bg-blue-100 text-blue-900' : 'bg-slate-200 text-slate-800'
+                                }`}
                             >
                               {isLent ? 'I Lent' : 'I Borrowed'}
                             </span>
@@ -549,18 +555,16 @@ export default function DuesPage() {
                           </td>
 
                           <td
-                            className={`py-3.5 px-4 text-right font-bold font-mono ${
-                              isLent ? 'text-blue-700' : 'text-slate-900'
-                            }`}
+                            className={`py-3.5 px-4 text-right font-bold font-mono ${isLent ? 'text-blue-700' : 'text-slate-900'
+                              }`}
                           >
                             ₹{d.remainingAmount}
                           </td>
 
                           <td className="py-3.5 px-4 text-center">
                             <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                isSettled ? 'bg-blue-100 text-blue-800' : 'bg-blue-50 text-blue-700'
-                              }`}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${isSettled ? 'bg-blue-100 text-blue-800' : 'bg-blue-50 text-blue-700'
+                                }`}
                             >
                               {d.status}
                             </span>
@@ -577,6 +581,13 @@ export default function DuesPage() {
                                   <span>Settle</span>
                                 </button>
                               )}
+                              <button
+                                onClick={() => setEditingDue(d)}
+                                className="rounded p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
+                                title="Edit Due Entry"
+                              >
+                                <Edit2 size={13} />
+                              </button>
                               <button
                                 onClick={() => {
                                   if (confirm('Delete this due record?')) deleteDue(d.id);
@@ -644,6 +655,17 @@ export default function DuesPage() {
               </div>
 
               <div className="flex items-center gap-2">
+                {activeSelectedLedger.contact && (
+                  <button
+                    type="button"
+                    onClick={() => setEditingContact(activeSelectedLedger.contact)}
+                    className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition"
+                    title="Edit Profile"
+                  >
+                    <Edit2 size={13} />
+                    <span>Edit Profile</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -675,13 +697,12 @@ export default function DuesPage() {
 
             {/* Net Balance Status Card */}
             <div
-              className={`rounded-2xl p-5 border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-                activeSelectedLedger.status === 'RECEIVABLE'
+              className={`rounded-2xl p-5 border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${activeSelectedLedger.status === 'RECEIVABLE'
                   ? 'border-blue-200 bg-gradient-to-r from-blue-900 to-blue-800 text-white'
                   : activeSelectedLedger.status === 'PAYABLE'
-                  ? 'border-slate-300 bg-slate-900 text-white'
-                  : 'border-slate-200 bg-slate-50 text-slate-900'
-              }`}
+                    ? 'border-slate-300 bg-slate-900 text-white'
+                    : 'border-slate-200 bg-slate-50 text-slate-900'
+                }`}
             >
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
@@ -770,16 +791,14 @@ export default function DuesPage() {
                     return (
                       <div
                         key={d.id}
-                        className={`rounded-xl border p-3.5 flex items-center justify-between gap-3 text-xs transition ${
-                          isSettled ? 'border-slate-200 bg-slate-50/40 opacity-75' : 'border-blue-100 bg-white shadow-sm'
-                        }`}
+                        className={`rounded-xl border p-3.5 flex items-center justify-between gap-3 text-xs transition ${isSettled ? 'border-slate-200 bg-slate-50/40 opacity-75' : 'border-blue-100 bg-white shadow-sm'
+                          }`}
                       >
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                isLent ? 'bg-blue-100 text-blue-900' : 'bg-slate-200 text-slate-800'
-                              }`}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${isLent ? 'bg-blue-100 text-blue-900' : 'bg-slate-200 text-slate-800'
+                                }`}
                             >
                               {isLent ? 'Money Lent (You gave)' : 'Money Borrowed (You took)'}
                             </span>
@@ -797,7 +816,7 @@ export default function DuesPage() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-1.5 shrink-0">
                           {!isSettled && (
                             <button
                               onClick={() => handleOpenSettle(d)}
@@ -806,6 +825,13 @@ export default function DuesPage() {
                               Settle
                             </button>
                           )}
+                          <button
+                            onClick={() => setEditingDue(d)}
+                            className="rounded p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
+                            title="Edit Loan Entry"
+                          >
+                            <Edit2 size={13} />
+                          </button>
                           <button
                             onClick={() => {
                               if (confirm('Delete this loan entry?')) deleteDue(d.id);
@@ -844,9 +870,8 @@ export default function DuesPage() {
                         </div>
                       </div>
                       <div
-                        className={`font-mono font-bold ${
-                          tx.type === 'INCOME' ? 'text-blue-700' : 'text-slate-900'
-                        }`}
+                        className={`font-mono font-bold ${tx.type === 'INCOME' ? 'text-blue-700' : 'text-slate-900'
+                          }`}
                       >
                         {tx.type === 'INCOME' ? '+' : '-'}₹{tx.amount}
                       </div>
@@ -1126,6 +1151,20 @@ export default function DuesPage() {
           </div>
         </div>
       )}
+
+      {/* Edit Due Modal */}
+      <EditDueModal
+        isOpen={!!editingDue}
+        due={editingDue}
+        onClose={() => setEditingDue(null)}
+      />
+
+      {/* Edit Contact Modal */}
+      <EditContactModal
+        isOpen={!!editingContact}
+        contact={editingContact}
+        onClose={() => setEditingContact(null)}
+      />
     </div>
   );
 }
