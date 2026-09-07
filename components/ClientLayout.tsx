@@ -65,7 +65,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       <div className="min-h-screen w-full flex flex-col items-center justify-center bg-slate-50 text-slate-500 space-y-3">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
         <div className="text-xs font-semibold tracking-wider text-slate-400 uppercase">
-          Loading MyFinBook...
+          Loading FinBook...
         </div>
       </div>
     );

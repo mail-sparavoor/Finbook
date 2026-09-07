@@ -47,7 +47,7 @@ export default function PersonalSettingsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `MyFinBook_Personal_Backup_${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `FinBook_Personal_Backup_${new Date().toISOString().split('T')[0]}.json`;
     link.click();
     link.remove();
   };

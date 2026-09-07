@@ -94,7 +94,7 @@ export default function PwaInstallPrompt() {
               <Smartphone size={20} />
             </div>
             <div>
-              <h4 className="text-xs font-bold text-slate-900 leading-tight">Install MyFinBook App</h4>
+              <h4 className="text-xs font-bold text-slate-900 leading-tight">Install FinBook App</h4>
               <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
                 Add to your phone home screen for instant, offline access.
               </p>
@@ -163,7 +163,7 @@ export default function PwaInstallPrompt() {
                   3
                 </span>
                 <p className="leading-snug">
-                  Tap <strong className="text-slate-900">Add</strong> in the top-right corner to place MyFinBook on your home screen.
+                  Tap <strong className="text-slate-900">Add</strong> in the top-right corner to place FinBook on your home screen.
                 </p>
               </div>
             </div>

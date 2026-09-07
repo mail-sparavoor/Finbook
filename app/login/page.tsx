@@ -58,7 +58,7 @@ export default function LoginPage() {
             <BookOpen size={28} className="stroke-[2.5]" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            MyFin<span className="text-blue-600">Book</span>
+            Fin<span className="text-blue-600">Book</span>
           </h1>
           <p className="text-xs text-slate-500 max-w-xs mx-auto">
             Personal cashbook, financial ledgers, lending tracking, and spending budgets

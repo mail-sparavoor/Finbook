@@ -1,4 +1,4 @@
-const CACHE_NAME = 'myfinbook-cache-v1';
+const CACHE_NAME = 'finbook-cache-v1';
 const STATIC_ASSETS = [
   '/',
   '/login',

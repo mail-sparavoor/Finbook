@@ -1,6 +1,6 @@
 {
-  "name": "MyFinBook - Personal Finance & Cashbook",
-  "short_name": "MyFinBook",
+  "name": "FinBook - Personal Finance & Cashbook",
+  "short_name": "FinBook",
   "description": "Personal cashbook, financial ledgers, lending tracking, and spending budgets",
   "start_url": "/",
   "id": "/",

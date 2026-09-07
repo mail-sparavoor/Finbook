@@ -80,7 +80,7 @@ export default function Sidebar() {
         </div>
         <div>
           <div className="text-base font-bold tracking-tight text-slate-900">
-            MyFin<span className="text-blue-600">Book</span>
+            Fin<span className="text-blue-600">Book</span>
           </div>
           <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
             {isAdmin ? 'System Admin' : 'Personal Finance'}

@@ -15,13 +15,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "MyFinBook | Personal Finance & CashBook",
+  title: "FinBook | Personal Finance & CashBook",
   description: "Personal cashbook, financial ledgers, lending tracking, and spending budgets.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "MyFinBook",
+    title: "FinBook",
   },
   formatDetection: {
     telephone: false,
@@ -54,7 +54,7 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="MyFinBook" />
+        <meta name="apple-mobile-web-app-title" content="FinBook" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
       <body className="bg-slate-50 text-slate-900 font-sans antialiased min-h-screen">
