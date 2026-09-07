@@ -21,8 +21,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   // Auth & Role Guard
   useEffect(() => {
     if (!isLoading) {
-      if (!currentUser && pathname !== '/login') {
-        router.push('/login');
+      if (!currentUser) {
+        if (pathname !== '/login') {
+          router.replace('/login');
+        }
         return;
       }
 
@@ -30,12 +32,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         if (currentUser.role === 'ADMIN') {
           // Admin only has access to User Account Management
           if (pathname !== '/admin/users') {
-            router.push('/admin/users');
+            router.replace('/admin/users');
           }
         } else if (currentUser.role === 'USER') {
-          // Standard User cannot access Admin routes
-          if (pathname.startsWith('/admin')) {
-            router.push('/dashboard');
+          // Standard User cannot access Admin routes or login page
+          if (pathname.startsWith('/admin') || pathname === '/login') {
+            router.replace('/dashboard');
           }
         }
       }
@@ -54,13 +56,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // If on /login page, render clean standalone view
-  if (pathname === '/login') {
-    return <>{children}</>;
-  }
-
-  // Loading state
-  if (isLoading) {
+  // Loading state (shows clean splash while determining authentication)
+  if (isLoading || (currentUser && pathname === '/login')) {
     return (
       <div className="min-h-screen w-full flex flex-col items-center justify-center bg-slate-50 text-slate-500 space-y-3">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
@@ -69,6 +66,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         </div>
       </div>
     );
+  }
+
+  // If unauthenticated on /login page, render clean standalone view
+  if (pathname === '/login') {
+    return <>{children}</>;
   }
 
   return (

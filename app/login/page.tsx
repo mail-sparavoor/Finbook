@@ -19,9 +19,9 @@ export default function LoginPage() {
   useEffect(() => {
     if (!isLoading && currentUser) {
       if (currentUser.role === 'ADMIN') {
-        router.push('/admin/users');
+        router.replace('/admin/users');
       } else {
-        router.push('/dashboard');
+        router.replace('/dashboard');
       }
     }
   }, [currentUser, isLoading, router]);
@@ -35,9 +35,9 @@ export default function LoginPage() {
       const result = await login(emailOrUser, password);
       if (result.success && result.user) {
         if (result.user.role === 'ADMIN') {
-          router.push('/admin/users');
+          router.replace('/admin/users');
         } else {
-          router.push('/dashboard');
+          router.replace('/dashboard');
         }
       } else {
         setErrorMsg(result.error || 'Failed to sign in. Please verify your credentials.');
@@ -48,6 +48,18 @@ export default function LoginPage() {
       setIsSubmitting(false);
     }
   };
+
+  // If loading or already authenticated, show clean spinner while redirecting
+  if (isLoading || currentUser) {
+    return (
+      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-b from-blue-50/60 to-slate-100 p-4">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent mb-3" />
+        <div className="text-xs font-semibold tracking-wider text-slate-400 uppercase">
+          Loading FinBook...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-b from-blue-50/60 to-slate-100 p-4 select-none">

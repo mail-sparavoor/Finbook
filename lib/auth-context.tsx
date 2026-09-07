@@ -30,34 +30,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch users & initialize session
+  // Fetch users & initialize session synchronously from localStorage
   useEffect(() => {
     let isMounted = true;
 
-    // Fast local initialization first so screen never hangs
-    const savedUsers = localStorage.getItem('myfinbook_system_users');
-    let loadedUsers = SEED_USERS;
-    if (savedUsers) {
+    // 1. Synchronously restore active session from localStorage
+    const savedUserStr = localStorage.getItem('myfinbook_session_user');
+    const savedSessionUserId = localStorage.getItem('myfinbook_session_user_id');
+    const savedUsersStr = localStorage.getItem('myfinbook_system_users');
+
+    let initialUser: UserAccount | null = null;
+    if (savedUserStr) {
       try {
-        const parsed = JSON.parse(savedUsers);
+        const parsed = JSON.parse(savedUserStr);
+        if (parsed && parsed.id && parsed.status === 'ACTIVE') {
+          initialUser = parsed;
+        }
+      } catch {}
+    }
+
+    let loadedUsers = SEED_USERS;
+    if (savedUsersStr) {
+      try {
+        const parsed = JSON.parse(savedUsersStr);
         if (Array.isArray(parsed) && parsed.length > 0) loadedUsers = parsed;
       } catch {}
     }
     setUsers(loadedUsers);
-    const savedSessionUserId = localStorage.getItem('myfinbook_session_user_id');
-    if (savedSessionUserId) {
+
+    if (initialUser) {
+      setCurrentUser(initialUser);
+    } else if (savedSessionUserId) {
       const matching = loadedUsers.find((u) => u.id === savedSessionUserId);
-      setCurrentUser(matching && matching.status === 'ACTIVE' ? matching : null);
+      if (matching && matching.status === 'ACTIVE') {
+        initialUser = matching;
+        setCurrentUser(matching);
+        localStorage.setItem('myfinbook_session_user', JSON.stringify(matching));
+      } else {
+        setCurrentUser(null);
+      }
     } else {
       setCurrentUser(null);
     }
+
     setIsLoading(false);
 
-    // Background sync with MySQL
+    // 2. Background sync with MySQL
     async function loadAuth() {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
         const res = await fetch('/api/auth', { signal: controller.signal });
         clearTimeout(timeoutId);
 
@@ -65,17 +87,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const json = await res.json();
           if (json.success && Array.isArray(json.data) && json.data.length > 0) {
             setUsers(json.data);
-            const currentSession = localStorage.getItem('myfinbook_session_user_id');
-            if (currentSession) {
-              const matched = json.data.find((u: UserAccount) => u.id === currentSession);
+            localStorage.setItem('myfinbook_system_users', JSON.stringify(json.data));
+
+            const currentSessionId = localStorage.getItem('myfinbook_session_user_id');
+            if (currentSessionId) {
+              const matched = json.data.find((u: UserAccount) => u.id === currentSessionId);
               if (matched && matched.status === 'ACTIVE') {
                 setCurrentUser(matched);
-              } else {
+                localStorage.setItem('myfinbook_session_user', JSON.stringify(matched));
+              } else if (matched && matched.status !== 'ACTIVE') {
                 setCurrentUser(null);
+                localStorage.removeItem('myfinbook_session_user');
                 localStorage.removeItem('myfinbook_session_user_id');
               }
-            } else {
-              setCurrentUser(null);
             }
           }
         }
@@ -101,6 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const json = await res.json();
       if (json.success && json.user) {
         setCurrentUser(json.user);
+        localStorage.setItem('myfinbook_session_user', JSON.stringify(json.user));
         localStorage.setItem('myfinbook_session_user_id', json.user.id);
         return { success: true, user: json.user };
       } else if (res.status === 401 || res.status === 403 || res.status === 404) {
@@ -128,12 +153,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setCurrentUser(foundUser);
+    localStorage.setItem('myfinbook_session_user', JSON.stringify(foundUser));
     localStorage.setItem('myfinbook_session_user_id', foundUser.id);
     return { success: true, user: foundUser };
   };
 
   const logout = () => {
     setCurrentUser(null);
+    localStorage.removeItem('myfinbook_session_user');
     localStorage.removeItem('myfinbook_session_user_id');
     if (typeof window !== 'undefined') {
       window.location.href = '/login';
@@ -210,18 +237,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.warn('API update user failed', e);
     }
 
-    setUsers((prev) =>
-      prev.map((u) => {
+    setUsers((prev) => {
+      const updatedList = prev.map((u) => {
         if (u.id === id) {
           const updated = { ...u, ...data };
           if (currentUser && currentUser.id === id) {
             setCurrentUser(updated);
+            localStorage.setItem('myfinbook_session_user', JSON.stringify(updated));
           }
           return updated;
         }
         return u;
-      })
-    );
+      });
+      localStorage.setItem('myfinbook_system_users', JSON.stringify(updatedList));
+      return updatedList;
+    });
     return { success: true };
   };
 
@@ -238,13 +268,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const updated = users.filter((u) => u.id !== id);
     setUsers(updated);
+    localStorage.setItem('myfinbook_system_users', JSON.stringify(updated));
 
     if (currentUser && currentUser.id === id) {
       const nextUser = updated.find((u) => u.status === 'ACTIVE') || null;
       setCurrentUser(nextUser);
       if (nextUser) {
+        localStorage.setItem('myfinbook_session_user', JSON.stringify(nextUser));
         localStorage.setItem('myfinbook_session_user_id', nextUser.id);
       } else {
+        localStorage.removeItem('myfinbook_session_user');
         localStorage.removeItem('myfinbook_session_user_id');
       }
     }
