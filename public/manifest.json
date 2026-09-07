@@ -1,0 +1,61 @@
+{
+  "name": "MyFinBook - Personal Finance & Cashbook",
+  "short_name": "MyFinBook",
+  "description": "Personal cashbook, financial ledgers, lending tracking, and spending budgets",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Add Transaction",
+      "short_name": "Add Tx",
+      "description": "Record a new income or expense entry",
+      "url": "/transactions?action=add",
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Dues & Khatabook",
+      "short_name": "Dues",
+      "description": "View lending and borrowing balance",
+      "url": "/dues",
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Monthly Budgets",
+      "short_name": "Budgets",
+      "description": "Check your category budgets",
+      "url": "/budgets",
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+    }
+  ],
+  "categories": ["finance", "productivity", "utilities"]
+}
