@@ -98,8 +98,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async function loadAuth() {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
-        const res = await fetch('/api/auth', { signal: controller.signal });
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const res = await fetch('/api/auth', { signal: controller.signal, cache: 'no-store' });
         clearTimeout(timeoutId);
 
         if (res.ok && isMounted) {

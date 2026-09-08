@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   PersonalTransaction,
   PersonalDue,
@@ -166,29 +166,44 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
   const expenseCategories = categoryNames;
   const incomeCategories = categoryNames;
 
-  // 1. Instant hydration from localStorage on user change
-  useEffect(() => {
-    if (!userId || typeof window === 'undefined') return;
+  const isFetchingRef = useRef(false);
+  const activeUserIdRef = useRef(userId);
+  activeUserIdRef.current = userId;
+
+  // Function to load state from localStorage cache
+  const hydrateFromCache = useCallback((targetUid: string) => {
+    if (!targetUid || typeof window === 'undefined') return false;
     try {
-      const cached = localStorage.getItem(`finbook_cache_v2_${userId}`);
+      const cached = localStorage.getItem(`finbook_cache_v2_${targetUid}`);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (parsed) {
+        if (parsed && typeof parsed === 'object') {
           if (Array.isArray(parsed.books) && parsed.books.length > 0) setBooks(parsed.books);
           if (Array.isArray(parsed.transactions)) setRawTransactions(parsed.transactions);
           if (Array.isArray(parsed.dues)) setRawDues(parsed.dues);
           if (Array.isArray(parsed.budgets)) setRawBudgets(parsed.budgets);
           if (Array.isArray(parsed.contacts)) setRawContacts(parsed.contacts);
           if (Array.isArray(parsed.categories)) setRawCategories(parsed.categories);
+
+          const savedBookId = localStorage.getItem(`finbook_active_book_${targetUid}`);
+          if (savedBookId) {
+            setActiveBookId(savedBookId);
+          }
+          return true;
         }
       }
-
-      const savedBookId = localStorage.getItem(`finbook_active_book_${userId}`);
-      if (savedBookId) {
-        setActiveBookId(savedBookId);
-      }
     } catch {}
-  }, [userId]);
+    return false;
+  }, []);
+
+  // 1. Instant hydration on mount & on user change
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const targetUid = userId || localStorage.getItem('myfinbook_session_user_id') || '';
+    if (targetUid) {
+      hydrateFromCache(targetUid);
+    }
+  }, [userId, hydrateFromCache]);
 
   // Helper to persist updated state to cache
   const persistCache = useCallback(
@@ -200,9 +215,10 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
       contacts?: PersonContact[];
       categories?: UserCategory[];
     }) => {
-      if (!userId || typeof window === 'undefined') return;
+      const targetUid = userId || (typeof window !== 'undefined' ? localStorage.getItem('myfinbook_session_user_id') : '');
+      if (!targetUid || typeof window === 'undefined') return;
       try {
-        const current = localStorage.getItem(`finbook_cache_v2_${userId}`);
+        const current = localStorage.getItem(`finbook_cache_v2_${targetUid}`);
         const parsed = current ? JSON.parse(current) : {};
         const merged = {
           books: data.books ?? parsed.books ?? books,
@@ -212,7 +228,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
           contacts: data.contacts ?? parsed.contacts ?? rawContacts,
           categories: data.categories ?? parsed.categories ?? rawCategories,
         };
-        localStorage.setItem(`finbook_cache_v2_${userId}`, JSON.stringify(merged));
+        localStorage.setItem(`finbook_cache_v2_${targetUid}`, JSON.stringify(merged));
       } catch {}
     },
     [userId, books, rawTransactions, rawDues, rawBudgets, rawContacts, rawCategories]
@@ -275,25 +291,45 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     }
   }, [userId]);
 
-  // Fetch all user data in a single fast parallel request
-  const refreshData = useCallback(async () => {
-    if (!currentUser || !userId) return;
+  // Fetch all user data with mobile-resilient multi-attempt retry
+  const refreshData = useCallback(async (retriesLeft = 2): Promise<void> => {
+    const targetUid = activeUserIdRef.current || (typeof window !== 'undefined' ? localStorage.getItem('myfinbook_session_user_id') : '');
+    if (!targetUid) return;
+
+    if (isFetchingRef.current && retriesLeft === 2) {
+      return;
+    }
+
+    isFetchingRef.current = true;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      // 15 seconds timeout to accommodate mobile network latency & cold DB pool
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      const res = await fetch(`/api/user-data?userId=${encodeURIComponent(userId)}`, {
+      const res = await fetch(`/api/user-data?userId=${encodeURIComponent(targetUid)}`, {
         signal: controller.signal,
+        cache: 'no-store',
       });
       clearTimeout(timeoutId);
 
+      if (!res.ok) {
+        throw new Error(`Server returned HTTP ${res.status}`);
+      }
+
       const json = await res.json();
       if (json.success && json.data) {
-        const { books: serverBooks, transactions: serverTx, dues: serverDues, budgets: serverBudgets, contacts: serverContacts, categories: serverCategories } = json.data;
+        const {
+          books: serverBooks,
+          transactions: serverTx,
+          dues: serverDues,
+          budgets: serverBudgets,
+          contacts: serverContacts,
+          categories: serverCategories,
+        } = json.data;
 
         if (Array.isArray(serverBooks) && serverBooks.length > 0) {
           setBooks(serverBooks);
-          const savedBookId = typeof window !== 'undefined' ? localStorage.getItem(`finbook_active_book_${userId}`) : null;
+          const savedBookId = typeof window !== 'undefined' ? localStorage.getItem(`finbook_active_book_${targetUid}`) : null;
           if (savedBookId && serverBooks.some((b: PersonalBook) => b.id === savedBookId)) {
             setActiveBookId(savedBookId);
           } else {
@@ -315,7 +351,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
                   existingNames.add(nameKey);
                   merged.push({
                     id: `cat-auto-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-                    userId,
+                    userId: targetUid,
                     name: t.category.trim(),
                     type: 'GENERAL',
                     color: '#2563eb',
@@ -335,7 +371,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
                   existingNames.add(nameKey);
                   merged.push({
                     id: `cat-auto-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-                    userId,
+                    userId: targetUid,
                     name: b.category.trim(),
                     type: 'GENERAL',
                     color: '#2563eb',
@@ -359,7 +395,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
         // Update local cache
         if (typeof window !== 'undefined') {
           localStorage.setItem(
-            `finbook_cache_v2_${userId}`,
+            `finbook_cache_v2_${targetUid}`,
             JSON.stringify({
               books: serverBooks,
               transactions: serverTx,
@@ -370,18 +406,57 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
             })
           );
         }
+      } else {
+        throw new Error(json.error || 'Invalid API payload');
       }
     } catch (error) {
-      console.warn('API data fetch failed, using cached state', error);
+      console.warn(`Data sync attempt failed (${retriesLeft} retries remaining):`, error);
+      if (retriesLeft > 0) {
+        const delay = (3 - retriesLeft) * 1500;
+        setTimeout(() => {
+          refreshData(retriesLeft - 1);
+        }, delay);
+      }
+    } finally {
+      isFetchingRef.current = false;
     }
-  }, [currentUser, userId]);
+  }, []);
 
-  // Load from MySQL when currentUser/userId changes
+  // Sync on mount and user changes
   useEffect(() => {
-    if (currentUser) {
+    if (userId) {
       refreshData();
     }
-  }, [currentUser, userId, refreshData]);
+  }, [userId, refreshData]);
+
+  // Mobile lifecycle listeners: Re-sync on network reconnect, app unlock/tab resume, and window focus
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleOnline = () => {
+      refreshData(2);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshData(1);
+      }
+    };
+
+    const handleFocus = () => {
+      refreshData(1);
+    };
+
+    window.addEventListener('online', handleOnline);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [refreshData]);
 
   // Create Book
   const createBook = async (data: {

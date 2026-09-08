@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finbook-cache-v1';
+const CACHE_NAME = 'finbook-cache-v2';
 const STATIC_ASSETS = [
   '/',
   '/login',
@@ -14,13 +14,15 @@ const STATIC_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
+      return cache.addAll(STATIC_ASSETS).catch((err) => {
+        console.warn('PWA static cache prefetch partial error:', err);
+      });
     })
   );
   self.skipWaiting();
 });
 
-// Activate: Clean up old caches
+// Activate: Clean up old caches immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -36,7 +38,9 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch strategy: Network first for API, cache fallback for static
+// Fetch strategy:
+// - API calls: Always pass directly to network (no interference)
+// - Static assets & Pages: Network first with cache fallback
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -46,38 +50,36 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API calls: Network first
+  // Never intercept /api/ calls - let client application code handle fetching, timeouts, and local caching
   if (url.pathname.startsWith('/api/')) {
-    event.respondWith(
-      fetch(request).catch(() => {
-        return new Response(
-          JSON.stringify({ error: 'You are offline. Showing cached records.' }),
-          {
-            headers: { 'Content-Type': 'application/json' },
-            status: 503,
-          }
-        );
-      })
-    );
     return;
   }
 
-  // Static assets & Navigation: Stale-While-Revalidate
+  // Network First for Navigation and Static assets, falling back to cache
   event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      const fetchPromise = fetch(request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseToCache = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, responseToCache);
-            });
+    fetch(request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(request, responseToCache).catch(() => {});
+          });
+        }
+        return networkResponse;
+      })
+      .catch(() => {
+        return caches.match(request).then((cachedResponse) => {
+          if (cachedResponse) {
+            return cachedResponse;
           }
-          return networkResponse;
-        })
-        .catch(() => cachedResponse);
-
-      return cachedResponse || fetchPromise;
-    })
+          if (request.mode === 'navigate') {
+            return caches.match('/login');
+          }
+          return new Response('Network error occurred', {
+            status: 408,
+            headers: { 'Content-Type': 'text/plain' },
+          });
+        });
+      })
   );
 });

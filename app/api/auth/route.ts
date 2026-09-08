@@ -45,13 +45,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, data: rows[0] });
     }
 
-    // Clean up any legacy demo sample user
-    try {
-      await pool.query(
-        `DELETE FROM users WHERE id = 'user-sample' OR LOWER(name) LIKE '%althaf%' OR LOWER(name) LIKE '%altaf%'`
-      );
-    } catch {}
-
     const [rows]: any = await pool.query(
       `SELECT id, name, email, phone, password_hash as password, role, status, currency, currency_symbol as currencySymbol, created_at as createdAt 
        FROM users 
