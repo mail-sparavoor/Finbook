@@ -52,14 +52,22 @@ export async function GET(request: Request) {
       `SELECT id, user_id as userId, name, type, color, icon, created_at as createdAt 
        FROM categories 
        WHERE user_id = ? 
-       GROUP BY user_id, name
        ORDER BY name ASC`,
       [userId]
     );
 
+    const rawList = rows || [];
+    const seenNames = new Set<string>();
+    const uniqueCategories = rawList.filter((c: any) => {
+      const key = (c.name || '').trim().toLowerCase();
+      if (!key || seenNames.has(key)) return false;
+      seenNames.add(key);
+      return true;
+    });
+
     return NextResponse.json({
       success: true,
-      categories: rows || [],
+      categories: uniqueCategories,
     });
   } catch (error: any) {
     console.error('Fetch categories error:', error);

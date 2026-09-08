@@ -260,26 +260,26 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     };
   }, [currentUser, currentBook]);
 
-  // Filter scoped data by active book
+  // Filter scoped data by active book (or all data if user has 1 book)
   const transactions = useMemo(() => {
-    if (!currentBook) return rawTransactions;
+    if (!currentBook || books.length <= 1) return rawTransactions;
     return rawTransactions.filter((t) => !t.bookId || t.bookId === currentBook.id);
-  }, [rawTransactions, currentBook]);
+  }, [rawTransactions, currentBook, books]);
 
   const dues = useMemo(() => {
-    if (!currentBook) return rawDues;
+    if (!currentBook || books.length <= 1) return rawDues;
     return rawDues.filter((d) => !d.bookId || d.bookId === currentBook.id);
-  }, [rawDues, currentBook]);
+  }, [rawDues, currentBook, books]);
 
   const contacts = useMemo(() => {
-    if (!currentBook) return rawContacts;
+    if (!currentBook || books.length <= 1) return rawContacts;
     return rawContacts.filter((c) => !c.bookId || c.bookId === currentBook.id);
-  }, [rawContacts, currentBook]);
+  }, [rawContacts, currentBook, books]);
 
   const budgets = useMemo(() => {
-    if (!currentBook) return rawBudgets;
+    if (!currentBook || books.length <= 1) return rawBudgets;
     return rawBudgets.filter((b) => !b.bookId || b.bookId === currentBook.id);
-  }, [rawBudgets, currentBook]);
+  }, [rawBudgets, currentBook, books]);
 
   // Switch Active Book
   const switchBook = useCallback((bookId: string) => {

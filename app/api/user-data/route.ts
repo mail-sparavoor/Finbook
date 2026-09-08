@@ -51,7 +51,7 @@ export async function GET(request: Request) {
       // 6. Categories
       pool.query(
         `SELECT id, user_id as userId, name, type, color, icon, created_at as createdAt 
-         FROM categories WHERE user_id = ? GROUP BY user_id, name ORDER BY name ASC`,
+         FROM categories WHERE user_id = ? ORDER BY name ASC`,
         [userId]
       ),
     ]);
@@ -86,7 +86,14 @@ export async function GET(request: Request) {
 
     const budgets = budgetsRes[0] || [];
     const contacts = contactsRes[0] || [];
-    const categories = categoriesRes[0] || [];
+    const rawCategories = categoriesRes[0] || [];
+    const seenCatNames = new Set<string>();
+    const categories = rawCategories.filter((c: any) => {
+      const key = (c.name || '').trim().toLowerCase();
+      if (!key || seenCatNames.has(key)) return false;
+      seenCatNames.add(key);
+      return true;
+    });
 
     // If user has no book yet, create default book
     if (books.length === 0) {
