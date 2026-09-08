@@ -25,6 +25,7 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
     addTransaction,
     addDue,
     contacts,
+    categoryNames,
     expenseCategories,
     incomeCategories,
     addCategory,
@@ -53,13 +54,14 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
 
-  // Keep category in sync with active category list
+  const currentCategoryList = categoryNames || expenseCategories;
+
+  // Keep category in sync with category list
   useEffect(() => {
-    const list = activeTab === 'EXPENSE' ? expenseCategories : incomeCategories;
-    if (list.length > 0 && (!category || !list.includes(category))) {
-      setCategory(list[0]);
+    if (currentCategoryList.length > 0 && (!category || !currentCategoryList.includes(category))) {
+      setCategory(currentCategoryList[0]);
     }
-  }, [activeTab, expenseCategories, incomeCategories, category]);
+  }, [currentCategoryList, category]);
 
   // Custom Category creation state
   const [isAddingCustomCategory, setIsAddingCustomCategory] = useState(false);
@@ -77,8 +79,6 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
   const [dueDate, setDueDate] = useState(new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0]);
 
   if (!isOpen || !mounted) return null;
-
-  const currentCategoryList = activeTab === 'EXPENSE' ? expenseCategories : incomeCategories;
 
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);
@@ -100,7 +100,7 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
     if (e) e.preventDefault();
     if (!customCategoryInput.trim()) return;
 
-    const newCat = await addCategory(activeTab === 'EXPENSE' ? 'EXPENSE' : 'INCOME', customCategoryInput);
+    const newCat = await addCategory(customCategoryInput);
     if (newCat) {
       setCategory(newCat);
       setCustomCategoryInput('');
@@ -276,7 +276,7 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
                     {isAddingCustomCategory || currentCategoryList.length === 0 ? (
                       <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3 space-y-2">
                         <div className="text-[11px] font-semibold text-blue-900">
-                          {currentCategoryList.length === 0 ? 'No categories yet. Add your first category:' : `Create Custom ${activeTab === 'EXPENSE' ? 'Expense' : 'Income'} Category:`}
+                          {currentCategoryList.length === 0 ? 'No categories yet. Add your first category:' : 'Create Custom Category:'}
                         </div>
                         <div className="flex gap-2">
                           <input

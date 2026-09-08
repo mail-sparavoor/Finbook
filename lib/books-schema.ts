@@ -32,13 +32,13 @@ export async function ensureBooksSchema() {
           id VARCHAR(64) PRIMARY KEY,
           user_id VARCHAR(64) NOT NULL,
           name VARCHAR(100) NOT NULL,
-          type ENUM('EXPENSE', 'INCOME') NOT NULL,
+          type VARCHAR(30) NULL DEFAULT 'GENERAL',
           color VARCHAR(30) NULL DEFAULT '#2563eb',
           icon VARCHAR(50) NULL DEFAULT 'Tag',
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           INDEX idx_categories_user (user_id),
-          UNIQUE KEY uniq_user_category (user_id, type, name)
+          INDEX idx_user_cat_name (user_id, name)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `),
     ]);

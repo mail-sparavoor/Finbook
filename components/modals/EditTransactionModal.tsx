@@ -16,6 +16,7 @@ export default function EditTransactionModal({ isOpen, onClose, transaction }: E
   const {
     profile,
     updateTransaction,
+    categoryNames,
     expenseCategories,
     incomeCategories,
     addCategory,
@@ -58,13 +59,13 @@ export default function EditTransactionModal({ isOpen, onClose, transaction }: E
 
   if (!isOpen || !transaction || !mounted) return null;
 
-  const currentCategoryList = type === 'EXPENSE' ? expenseCategories : incomeCategories;
+  const currentCategoryList = categoryNames || expenseCategories;
 
   const handleSaveCustomCategory = async (e?: React.MouseEvent | React.KeyboardEvent) => {
     if (e) e.preventDefault();
     if (!customCategoryInput.trim()) return;
 
-    const newCat = await addCategory(type, customCategoryInput);
+    const newCat = await addCategory(customCategoryInput);
     if (newCat) {
       setCategory(newCat);
       setCustomCategoryInput('');
@@ -203,7 +204,7 @@ export default function EditTransactionModal({ isOpen, onClose, transaction }: E
               {isAddingCustomCategory || currentCategoryList.length === 0 ? (
                 <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3 space-y-2">
                   <div className="text-[11px] font-semibold text-blue-900">
-                    {currentCategoryList.length === 0 ? 'No categories yet. Add your first category:' : `Create Custom ${type === 'EXPENSE' ? 'Expense' : 'Income'} Category:`}
+                    {currentCategoryList.length === 0 ? 'No categories yet. Add your first category:' : 'Create Custom Category:'}
                   </div>
                   <div className="flex gap-2">
                     <input

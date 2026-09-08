@@ -75,7 +75,7 @@ export interface UserCategory {
   id: string;
   userId: string;
   name: string;
-  type: 'EXPENSE' | 'INCOME';
+  type?: string;
   color?: string;
   icon?: string;
   createdAt?: string;

@@ -21,25 +21,25 @@ export async function GET(request: Request) {
       pool.query(
         `INSERT IGNORE INTO categories (id, user_id, name, type, color, icon)
          SELECT 
-           CONCAT('cat-tx-', MD5(CONCAT(user_id, '_', type, '_', TRIM(category)))),
+           CONCAT('cat-tx-', MD5(CONCAT(user_id, '_', TRIM(category)))),
            user_id,
            TRIM(category) as name,
-           type,
-           IF(type = 'EXPENSE', '#ef4444', '#10b981'),
+           'GENERAL',
+           '#2563eb',
            'Tag'
          FROM transactions
          WHERE user_id = ? AND category IS NOT NULL AND TRIM(category) != ''
-         GROUP BY user_id, type, TRIM(category)`,
+         GROUP BY user_id, TRIM(category)`,
         [userId]
       ),
       pool.query(
         `INSERT IGNORE INTO categories (id, user_id, name, type, color, icon)
          SELECT 
-           CONCAT('cat-bg-', MD5(CONCAT(user_id, '_EXPENSE_', TRIM(category)))),
+           CONCAT('cat-bg-', MD5(CONCAT(user_id, '_', TRIM(category)))),
            user_id,
            TRIM(category) as name,
-           'EXPENSE',
-           '#ef4444',
+           'GENERAL',
+           '#2563eb',
            'Tag'
          FROM budgets
          WHERE user_id = ? AND category IS NOT NULL AND TRIM(category) != ''
@@ -52,6 +52,7 @@ export async function GET(request: Request) {
       `SELECT id, user_id as userId, name, type, color, icon, created_at as createdAt 
        FROM categories 
        WHERE user_id = ? 
+       GROUP BY user_id, name
        ORDER BY name ASC`,
       [userId]
     );
@@ -70,32 +71,33 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { userId, name, type, color, icon } = body;
+    const { userId, name, color, icon } = body;
+    const type = body.type || 'GENERAL';
 
-    if (!userId || !name || !type) {
-      return NextResponse.json({ success: false, error: 'User ID, name, and type are required' }, { status: 400 });
+    if (!userId || !name) {
+      return NextResponse.json({ success: false, error: 'User ID and category name are required' }, { status: 400 });
     }
 
     await ensureBooksSchema();
 
     const trimmedName = name.trim();
     const categoryId = body.id || `cat-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    const catColor = color || (type === 'EXPENSE' ? '#ef4444' : '#10b981');
+    const catColor = color || '#2563eb';
     const catIcon = icon || 'Tag';
 
-    // Insert or ignore if duplicate
+    // Insert or update
     await pool.query(
       `INSERT INTO categories (id, user_id, name, type, color, icon)
        VALUES (?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP`,
+       ON DUPLICATE KEY UPDATE color = VALUES(color), icon = VALUES(icon), updated_at = CURRENT_TIMESTAMP`,
       [categoryId, userId, trimmedName, type, catColor, catIcon]
     );
 
     const [rows]: any = await pool.query(
       `SELECT id, user_id as userId, name, type, color, icon, created_at as createdAt 
        FROM categories 
-       WHERE user_id = ? AND type = ? AND name = ?`,
-      [userId, type, trimmedName]
+       WHERE user_id = ? AND name = ?`,
+      [userId, trimmedName]
     );
 
     return NextResponse.json({

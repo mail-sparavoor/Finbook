@@ -49,10 +49,9 @@ export default function PersonalSettingsPage() {
   const [selectedBookForEdit, setSelectedBookForEdit] = useState<PersonalBook | null>(null);
 
   // Category Management state
-  const [activeCategoryTab, setActiveCategoryTab] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCatName, setNewCatName] = useState('');
-  const [newCatColor, setNewCatColor] = useState('#ef4444');
+  const [newCatColor, setNewCatColor] = useState('#2563eb');
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editingCatName, setEditingCatName] = useState('');
   const [editingCatColor, setEditingCatColor] = useState('');
@@ -101,11 +100,11 @@ export default function PersonalSettingsPage() {
     if (!newCatName.trim()) return;
 
     try {
-      const added = await addCategory(activeCategoryTab, newCatName.trim(), newCatColor);
+      const added = await addCategory(newCatName.trim(), newCatColor);
       if (added) {
         setNewCatName('');
         setIsAddingCategory(false);
-        setCategoryMsg(`Added "${added}" to ${activeCategoryTab === 'EXPENSE' ? 'Expense' : 'Income'} categories!`);
+        setCategoryMsg(`Added "${added}" to your categories!`);
         setTimeout(() => setCategoryMsg(null), 3000);
       } else {
         setCategoryError('Failed to add category or category already exists.');
@@ -118,7 +117,7 @@ export default function PersonalSettingsPage() {
   const handleStartEditCategory = (cat: UserCategory) => {
     setEditingCategoryId(cat.id);
     setEditingCatName(cat.name);
-    setEditingCatColor(cat.color || (cat.type === 'EXPENSE' ? '#ef4444' : '#10b981'));
+    setEditingCatColor(cat.color || '#2563eb');
   };
 
   const handleSaveEditCategory = async (e: React.FormEvent) => {
@@ -167,7 +166,6 @@ export default function PersonalSettingsPage() {
     setBookModalOpen(true);
   };
 
-  const filteredCategories = categories.filter((c) => c.type === activeCategoryTab);
   const COLOR_PALETTE = ['#ef4444', '#10b981', '#2563eb', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#475569'];
 
   return (
@@ -285,8 +283,8 @@ export default function PersonalSettingsPage() {
               <Tag size={16} className="stroke-[2.5]" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-900">Custom Categories</h2>
-              <p className="text-xs text-slate-500">Create, edit, or delete categories specific to your account</p>
+              <h2 className="text-sm font-bold text-slate-900">Custom Categories ({categories.length})</h2>
+              <p className="text-xs text-slate-500">Create, edit, or delete categories for all cashbook entries and budgets</p>
             </div>
           </div>
 
@@ -294,12 +292,12 @@ export default function PersonalSettingsPage() {
             type="button"
             onClick={() => {
               setIsAddingCategory(!isAddingCategory);
-              setNewCatColor(activeCategoryTab === 'EXPENSE' ? '#ef4444' : '#10b981');
+              setNewCatColor('#2563eb');
             }}
             className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 transition active:scale-95 self-start sm:self-auto"
           >
             <Plus size={14} className="stroke-[2.5]" />
-            <span>{isAddingCategory ? 'Cancel' : `Add ${activeCategoryTab === 'EXPENSE' ? 'Expense' : 'Income'} Category`}</span>
+            <span>{isAddingCategory ? 'Cancel' : 'Add Category'}</span>
           </button>
         </div>
 
@@ -317,43 +315,11 @@ export default function PersonalSettingsPage() {
           </div>
         )}
 
-        {/* Tabs: Expense Categories vs Income Categories */}
-        <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 w-full sm:w-80">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveCategoryTab('EXPENSE');
-              setIsAddingCategory(false);
-              setEditingCategoryId(null);
-            }}
-            className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold transition ${
-              activeCategoryTab === 'EXPENSE' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <TrendingDown size={13} />
-            <span>Expense ({categories.filter((c) => c.type === 'EXPENSE').length})</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setActiveCategoryTab('INCOME');
-              setIsAddingCategory(false);
-              setEditingCategoryId(null);
-            }}
-            className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold transition ${
-              activeCategoryTab === 'INCOME' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <TrendingUp size={13} />
-            <span>Income ({categories.filter((c) => c.type === 'INCOME').length})</span>
-          </button>
-        </div>
-
         {/* Add Category Form */}
         {isAddingCategory && (
           <form onSubmit={handleCreateCategory} className="rounded-2xl border border-blue-200 bg-blue-50/60 p-4 space-y-3.5 animate-in fade-in">
             <div className="text-xs font-bold text-blue-950">
-              Create New {activeCategoryTab === 'EXPENSE' ? 'Expense' : 'Income'} Category
+              Create New Category
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -363,7 +329,7 @@ export default function PersonalSettingsPage() {
                   type="text"
                   required
                   autoFocus
-                  placeholder={activeCategoryTab === 'EXPENSE' ? 'e.g. Groceries, Fuel, Netflix, Dining...' : 'e.g. Salary, Side Gig, Dividends, Rental...'}
+                  placeholder="e.g. Groceries, Salary, Fuel, Dining, Freelance, Shopping..."
                   value={newCatName}
                   onChange={(e) => setNewCatName(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-blue-600 focus:outline-none"
@@ -408,34 +374,34 @@ export default function PersonalSettingsPage() {
         )}
 
         {/* Categories List */}
-        {filteredCategories.length === 0 && !isAddingCategory ? (
+        {categories.length === 0 && !isAddingCategory ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-8 text-center space-y-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-200 text-slate-500 mx-auto">
               <Tag size={22} />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-800">No {activeCategoryTab === 'EXPENSE' ? 'Expense' : 'Income'} Categories Yet</h3>
+              <h3 className="text-sm font-bold text-slate-800">No Categories Yet</h3>
               <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                You haven't added any {activeCategoryTab === 'EXPENSE' ? 'expense' : 'income'} categories. Add categories that match your lifestyle to organize transactions and set budgets.
+                You haven't added any categories. Add categories that match your lifestyle or work to organize entries and set budgets.
               </p>
             </div>
             <button
               type="button"
               onClick={() => {
                 setIsAddingCategory(true);
-                setNewCatColor(activeCategoryTab === 'EXPENSE' ? '#ef4444' : '#10b981');
+                setNewCatColor('#2563eb');
               }}
               className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 transition"
             >
               <Plus size={14} className="stroke-[2.5]" />
-              <span>Add First {activeCategoryTab === 'EXPENSE' ? 'Expense' : 'Income'} Category</span>
+              <span>Add First Category</span>
             </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filteredCategories.map((cat) => {
+            {categories.map((cat) => {
               const isEditing = editingCategoryId === cat.id;
-              const usageCount = transactions.filter((t) => t.category === cat.name && t.type === cat.type).length;
+              const usageCount = transactions.filter((t) => t.category.toLowerCase() === cat.name.toLowerCase()).length;
 
               if (isEditing) {
                 return (
@@ -496,12 +462,12 @@ export default function PersonalSettingsPage() {
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span
                       className="h-3.5 w-3.5 rounded-full shrink-0 shadow-2xs"
-                      style={{ backgroundColor: cat.color || (cat.type === 'EXPENSE' ? '#ef4444' : '#10b981') }}
+                      style={{ backgroundColor: cat.color || '#2563eb' }}
                     />
                     <div className="min-w-0">
                       <div className="text-xs font-bold text-slate-900 truncate">{cat.name}</div>
                       <div className="text-[10px] text-slate-400 font-medium">
-                        {usageCount} {usageCount === 1 ? 'transaction' : 'transactions'}
+                        {usageCount} {usageCount === 1 ? 'entry' : 'entries'}
                       </div>
                     </div>
                   </div>

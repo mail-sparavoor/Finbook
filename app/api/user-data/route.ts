@@ -20,25 +20,25 @@ export async function GET(request: Request) {
       pool.query(
         `INSERT IGNORE INTO categories (id, user_id, name, type, color, icon)
          SELECT 
-           CONCAT('cat-tx-', MD5(CONCAT(user_id, '_', type, '_', TRIM(category)))),
+           CONCAT('cat-tx-', MD5(CONCAT(user_id, '_', TRIM(category)))),
            user_id,
            TRIM(category) as name,
-           type,
-           IF(type = 'EXPENSE', '#ef4444', '#10b981'),
+           'GENERAL',
+           '#2563eb',
            'Tag'
          FROM transactions
          WHERE user_id = ? AND category IS NOT NULL AND TRIM(category) != ''
-         GROUP BY user_id, type, TRIM(category)`,
+         GROUP BY user_id, TRIM(category)`,
         [userId]
       ),
       pool.query(
         `INSERT IGNORE INTO categories (id, user_id, name, type, color, icon)
          SELECT 
-           CONCAT('cat-bg-', MD5(CONCAT(user_id, '_EXPENSE_', TRIM(category)))),
+           CONCAT('cat-bg-', MD5(CONCAT(user_id, '_', TRIM(category)))),
            user_id,
            TRIM(category) as name,
-           'EXPENSE',
-           '#ef4444',
+           'GENERAL',
+           '#2563eb',
            'Tag'
          FROM budgets
          WHERE user_id = ? AND category IS NOT NULL AND TRIM(category) != ''
@@ -82,7 +82,7 @@ export async function GET(request: Request) {
       // 6. Categories
       pool.query(
         `SELECT id, user_id as userId, name, type, color, icon, created_at as createdAt 
-         FROM categories WHERE user_id = ? ORDER BY name ASC`,
+         FROM categories WHERE user_id = ? GROUP BY user_id, name ORDER BY name ASC`,
         [userId]
       ),
     ]);

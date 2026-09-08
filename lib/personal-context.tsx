@@ -106,9 +106,10 @@ interface PersonalContextType {
 
   // Categories & Payment Modes
   categories: UserCategory[];
+  categoryNames: string[];
   expenseCategories: string[];
   incomeCategories: string[];
-  addCategory: (type: 'EXPENSE' | 'INCOME', categoryName: string, color?: string) => Promise<string>;
+  addCategory: (categoryNameOrType: string, maybeName?: string, color?: string) => Promise<string>;
   updateCategory: (id: string, newName: string, color?: string) => Promise<{ success: boolean; error?: string }>;
   deleteCategory: (id: string) => Promise<{ success: boolean; error?: string }>;
   paymentModes: string[];
@@ -155,18 +156,15 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
   const [paymentModes, setPaymentModes] = useState<string[]>(DEFAULT_PAYMENT_MODES);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const expenseCategories = useMemo(() => {
-    const custom = rawCategories.filter((c) => c.type === 'EXPENSE').map((c) => c.name);
-    const fromTx = rawTransactions.filter((t) => t.type === 'EXPENSE' && t.category).map((t) => t.category.trim());
-    const fromBg = rawBudgets.filter((b) => b.category).map((b) => b.category.trim());
-    return Array.from(new Set([...custom, ...fromTx, ...fromBg])).filter(Boolean);
+  const categoryNames = useMemo(() => {
+    const custom = rawCategories.map((c) => c.name.trim());
+    const fromTx = rawTransactions.map((t) => t.category?.trim());
+    const fromBg = rawBudgets.map((b) => b.category?.trim());
+    return Array.from(new Set([...custom, ...fromTx, ...fromBg])).filter(Boolean) as string[];
   }, [rawCategories, rawTransactions, rawBudgets]);
 
-  const incomeCategories = useMemo(() => {
-    const custom = rawCategories.filter((c) => c.type === 'INCOME').map((c) => c.name);
-    const fromTx = rawTransactions.filter((t) => t.type === 'INCOME' && t.category).map((t) => t.category.trim());
-    return Array.from(new Set([...custom, ...fromTx])).filter(Boolean);
-  }, [rawCategories, rawTransactions]);
+  const expenseCategories = categoryNames;
+  const incomeCategories = categoryNames;
 
   // 1. Instant hydration from localStorage on user change
   useEffect(() => {
@@ -306,21 +304,21 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
 
         let finalCategories: UserCategory[] = Array.isArray(serverCategories) ? serverCategories : [];
         if (Array.isArray(serverCategories)) {
-          const existingKeys = new Set(serverCategories.map((c: UserCategory) => `${c.type}_${c.name.toLowerCase()}`));
+          const existingNames = new Set(serverCategories.map((c: UserCategory) => c.name.toLowerCase()));
           const merged = [...serverCategories];
 
           if (Array.isArray(serverTx)) {
             serverTx.forEach((t: PersonalTransaction) => {
               if (t.category && t.category.trim()) {
-                const key = `${t.type}_${t.category.trim().toLowerCase()}`;
-                if (!existingKeys.has(key)) {
-                  existingKeys.add(key);
+                const nameKey = t.category.trim().toLowerCase();
+                if (!existingNames.has(nameKey)) {
+                  existingNames.add(nameKey);
                   merged.push({
                     id: `cat-auto-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
                     userId,
                     name: t.category.trim(),
-                    type: t.type,
-                    color: t.type === 'EXPENSE' ? '#ef4444' : '#10b981',
+                    type: 'GENERAL',
+                    color: '#2563eb',
                     icon: 'Tag',
                     createdAt: new Date().toISOString(),
                   });
@@ -332,15 +330,15 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
           if (Array.isArray(serverBudgets)) {
             serverBudgets.forEach((b: PersonalBudget) => {
               if (b.category && b.category.trim()) {
-                const key = `EXPENSE_${b.category.trim().toLowerCase()}`;
-                if (!existingKeys.has(key)) {
-                  existingKeys.add(key);
+                const nameKey = b.category.trim().toLowerCase();
+                if (!existingNames.has(nameKey)) {
+                  existingNames.add(nameKey);
                   merged.push({
                     id: `cat-auto-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
                     userId,
                     name: b.category.trim(),
-                    type: 'EXPENSE',
-                    color: '#ef4444',
+                    type: 'GENERAL',
+                    color: '#2563eb',
                     icon: 'Tag',
                     createdAt: new Date().toISOString(),
                   });
@@ -494,13 +492,25 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     }
   };
 
-  const addCategory = async (type: 'EXPENSE' | 'INCOME', categoryName: string, color?: string): Promise<string> => {
-    const trimmed = categoryName.trim();
+  const addCategory = async (
+    categoryNameOrType: string,
+    maybeCategoryName?: string,
+    color?: string
+  ): Promise<string> => {
+    let nameToUse = categoryNameOrType;
+    let colorToUse = color;
+
+    // Handle both addCategory('Food', '#2563eb') and addCategory('EXPENSE', 'Food', '#2563eb')
+    if (maybeCategoryName !== undefined && typeof maybeCategoryName === 'string') {
+      nameToUse = maybeCategoryName;
+    }
+
+    const trimmed = nameToUse.trim();
     if (!trimmed || !userId) return '';
 
     // Check if already exists in user's category list
     const existing = rawCategories.find(
-      (c) => c.type === type && c.name.toLowerCase() === trimmed.toLowerCase()
+      (c) => c.name.toLowerCase() === trimmed.toLowerCase()
     );
     if (existing) return existing.name;
 
@@ -509,8 +519,8 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
       id: newCatId,
       userId,
       name: trimmed,
-      type,
-      color: color || (type === 'EXPENSE' ? '#ef4444' : '#10b981'),
+      type: 'GENERAL',
+      color: colorToUse || '#2563eb',
       icon: 'Tag',
       createdAt: new Date().toISOString(),
     };
@@ -531,7 +541,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
           id: newCatId,
           userId,
           name: trimmed,
-          type,
+          type: 'GENERAL',
           color: newCategory.color,
         }),
       }).catch((err) => console.error('Failed to save category to MySQL', err));
@@ -823,14 +833,13 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     });
 
     // Auto-save category to user categories if not present
-    if (tx.category && tx.category.trim() && userId && (tx.type === 'EXPENSE' || tx.type === 'INCOME')) {
+    if (tx.category && tx.category.trim() && userId) {
       const trimmedCat = tx.category.trim();
-      const catType = tx.type;
       const catExists = rawCategories.some(
-        (c) => c.type === catType && c.name.toLowerCase() === trimmedCat.toLowerCase()
+        (c) => c.name.toLowerCase() === trimmedCat.toLowerCase()
       );
       if (!catExists) {
-        addCategory(catType, trimmedCat);
+        addCategory(trimmedCat);
       }
     }
 
@@ -1063,10 +1072,10 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     if (category && category.trim() && userId) {
       const trimmedCat = category.trim();
       const catExists = rawCategories.some(
-        (c) => c.type === 'EXPENSE' && c.name.toLowerCase() === trimmedCat.toLowerCase()
+        (c) => c.name.toLowerCase() === trimmedCat.toLowerCase()
       );
       if (!catExists) {
-        addCategory('EXPENSE', trimmedCat);
+        addCategory(trimmedCat);
       }
     }
 
@@ -1219,6 +1228,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
         budgets,
         updateBudgetLimit,
         categories: rawCategories,
+        categoryNames,
         expenseCategories,
         incomeCategories,
         addCategory,

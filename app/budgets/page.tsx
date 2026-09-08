@@ -178,7 +178,7 @@ export default function BudgetsPage() {
             {expenseCategories.length === 0 ? (
               <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center space-y-3 text-xs">
                 <p className="text-slate-600">
-                  You haven't created any <strong>Expense Categories</strong> yet. Please add custom categories in Settings first.
+                  You haven't created any <strong>Categories</strong> yet. Please add custom categories in Settings first.
                 </p>
                 <div className="flex items-center justify-center gap-2">
                   <button
@@ -201,7 +201,7 @@ export default function BudgetsPage() {
             ) : (
               <form onSubmit={handleSaveBudget} className="mt-4 space-y-3 text-xs">
                 <div>
-                  <label className="block font-semibold text-slate-700">Expense Category</label>
+                  <label className="block font-semibold text-slate-700">Category</label>
                   <select
                     value={selectedCategory}
                     required
