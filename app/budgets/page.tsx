@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePersonalFinance } from '@/lib/personal-context';
 import { formatCurrency } from '@/lib/finance-math';
 import { PersonalTransaction, PersonalBudget } from '@/lib/types';
@@ -21,6 +21,12 @@ export default function BudgetsPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(expenseCategories[0] || '');
   const [limitAmount, setLimitAmount] = useState('5000');
+
+  useEffect(() => {
+    if (expenseCategories.length > 0 && (!selectedCategory || !expenseCategories.includes(selectedCategory))) {
+      setSelectedCategory(expenseCategories[0]);
+    }
+  }, [expenseCategories, selectedCategory]);
 
   // Calculate monthly spent for each budget category
   const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM

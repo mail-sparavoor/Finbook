@@ -155,14 +155,18 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
   const [paymentModes, setPaymentModes] = useState<string[]>(DEFAULT_PAYMENT_MODES);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const expenseCategories = useMemo(
-    () => rawCategories.filter((c) => c.type === 'EXPENSE').map((c) => c.name),
-    [rawCategories]
-  );
-  const incomeCategories = useMemo(
-    () => rawCategories.filter((c) => c.type === 'INCOME').map((c) => c.name),
-    [rawCategories]
-  );
+  const expenseCategories = useMemo(() => {
+    const custom = rawCategories.filter((c) => c.type === 'EXPENSE').map((c) => c.name);
+    const fromTx = rawTransactions.filter((t) => t.type === 'EXPENSE' && t.category).map((t) => t.category.trim());
+    const fromBg = rawBudgets.filter((b) => b.category).map((b) => b.category.trim());
+    return Array.from(new Set([...custom, ...fromTx, ...fromBg])).filter(Boolean);
+  }, [rawCategories, rawTransactions, rawBudgets]);
+
+  const incomeCategories = useMemo(() => {
+    const custom = rawCategories.filter((c) => c.type === 'INCOME').map((c) => c.name);
+    const fromTx = rawTransactions.filter((t) => t.type === 'INCOME' && t.category).map((t) => t.category.trim());
+    return Array.from(new Set([...custom, ...fromTx])).filter(Boolean);
+  }, [rawCategories, rawTransactions]);
 
   // 1. Instant hydration from localStorage on user change
   useEffect(() => {
@@ -300,11 +304,59 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
           }
         }
 
+        let finalCategories: UserCategory[] = Array.isArray(serverCategories) ? serverCategories : [];
+        if (Array.isArray(serverCategories)) {
+          const existingKeys = new Set(serverCategories.map((c: UserCategory) => `${c.type}_${c.name.toLowerCase()}`));
+          const merged = [...serverCategories];
+
+          if (Array.isArray(serverTx)) {
+            serverTx.forEach((t: PersonalTransaction) => {
+              if (t.category && t.category.trim()) {
+                const key = `${t.type}_${t.category.trim().toLowerCase()}`;
+                if (!existingKeys.has(key)) {
+                  existingKeys.add(key);
+                  merged.push({
+                    id: `cat-auto-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                    userId,
+                    name: t.category.trim(),
+                    type: t.type,
+                    color: t.type === 'EXPENSE' ? '#ef4444' : '#10b981',
+                    icon: 'Tag',
+                    createdAt: new Date().toISOString(),
+                  });
+                }
+              }
+            });
+          }
+
+          if (Array.isArray(serverBudgets)) {
+            serverBudgets.forEach((b: PersonalBudget) => {
+              if (b.category && b.category.trim()) {
+                const key = `EXPENSE_${b.category.trim().toLowerCase()}`;
+                if (!existingKeys.has(key)) {
+                  existingKeys.add(key);
+                  merged.push({
+                    id: `cat-auto-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                    userId,
+                    name: b.category.trim(),
+                    type: 'EXPENSE',
+                    color: '#ef4444',
+                    icon: 'Tag',
+                    createdAt: new Date().toISOString(),
+                  });
+                }
+              }
+            });
+          }
+
+          finalCategories = merged;
+        }
+
         if (Array.isArray(serverTx)) setRawTransactions(serverTx);
         if (Array.isArray(serverDues)) setRawDues(serverDues);
         if (Array.isArray(serverBudgets)) setRawBudgets(serverBudgets);
         if (Array.isArray(serverContacts)) setRawContacts(serverContacts);
-        if (Array.isArray(serverCategories)) setRawCategories(serverCategories);
+        setRawCategories(finalCategories);
 
         // Update local cache
         if (typeof window !== 'undefined') {
@@ -316,7 +368,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
               dues: serverDues,
               budgets: serverBudgets,
               contacts: serverContacts,
-              categories: serverCategories || [],
+              categories: finalCategories,
             })
           );
         }
@@ -770,6 +822,18 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
       return updated;
     });
 
+    // Auto-save category to user categories if not present
+    if (tx.category && tx.category.trim() && userId && (tx.type === 'EXPENSE' || tx.type === 'INCOME')) {
+      const trimmedCat = tx.category.trim();
+      const catType = tx.type;
+      const catExists = rawCategories.some(
+        (c) => c.type === catType && c.name.toLowerCase() === trimmedCat.toLowerCase()
+      );
+      if (!catExists) {
+        addCategory(catType, trimmedCat);
+      }
+    }
+
     // Async MySQL insert
     fetch('/api/transactions', {
       method: 'POST',
@@ -994,6 +1058,17 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
       persistCache({ budgets: updated });
       return updated;
     });
+
+    // Auto-save category to user categories if not present
+    if (category && category.trim() && userId) {
+      const trimmedCat = category.trim();
+      const catExists = rawCategories.some(
+        (c) => c.type === 'EXPENSE' && c.name.toLowerCase() === trimmedCat.toLowerCase()
+      );
+      if (!catExists) {
+        addCategory('EXPENSE', trimmedCat);
+      }
+    }
 
     fetch('/api/budgets', {
       method: 'POST',

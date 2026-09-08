@@ -48,10 +48,18 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
 
   // Common form fields
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState(expenseCategories[0] || '');
+  const [category, setCategory] = useState('');
   const [paymentMode, setPaymentMode] = useState(paymentModes[0] || 'Online / UPI');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
+
+  // Keep category in sync with active category list
+  useEffect(() => {
+    const list = activeTab === 'EXPENSE' ? expenseCategories : incomeCategories;
+    if (list.length > 0 && (!category || !list.includes(category))) {
+      setCategory(list[0]);
+    }
+  }, [activeTab, expenseCategories, incomeCategories, category]);
 
   // Custom Category creation state
   const [isAddingCustomCategory, setIsAddingCustomCategory] = useState(false);

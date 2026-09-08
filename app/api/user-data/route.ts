@@ -15,6 +15,38 @@ export async function GET(request: Request) {
 
     await ensureBooksSchema();
 
+    // Auto-seed categories from existing transactions and budgets if any exist for this user
+    await Promise.allSettled([
+      pool.query(
+        `INSERT IGNORE INTO categories (id, user_id, name, type, color, icon)
+         SELECT 
+           CONCAT('cat-tx-', MD5(CONCAT(user_id, '_', type, '_', TRIM(category)))),
+           user_id,
+           TRIM(category) as name,
+           type,
+           IF(type = 'EXPENSE', '#ef4444', '#10b981'),
+           'Tag'
+         FROM transactions
+         WHERE user_id = ? AND category IS NOT NULL AND TRIM(category) != ''
+         GROUP BY user_id, type, TRIM(category)`,
+        [userId]
+      ),
+      pool.query(
+        `INSERT IGNORE INTO categories (id, user_id, name, type, color, icon)
+         SELECT 
+           CONCAT('cat-bg-', MD5(CONCAT(user_id, '_EXPENSE_', TRIM(category)))),
+           user_id,
+           TRIM(category) as name,
+           'EXPENSE',
+           '#ef4444',
+           'Tag'
+         FROM budgets
+         WHERE user_id = ? AND category IS NOT NULL AND TRIM(category) != ''
+         GROUP BY user_id, TRIM(category)`,
+        [userId]
+      ),
+    ]);
+
     // Run all 6 queries in parallel in a single connection batch
     const [booksRes, txRes, duesRes, budgetsRes, contactsRes, categoriesRes]: any = await Promise.all([
       // 1. Books
