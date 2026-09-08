@@ -2,9 +2,9 @@
 
 import React, { useState } from 'react';
 import { usePersonalFinance } from '@/lib/personal-context';
-import { EXPENSE_CATEGORIES } from '@/lib/storage';
 import { formatCurrency } from '@/lib/finance-math';
 import { PersonalTransaction, PersonalBudget } from '@/lib/types';
+import Link from 'next/link';
 import {
   PieChart,
   Plus,
@@ -12,13 +12,14 @@ import {
   AlertTriangle,
   CheckCircle,
   TrendingUp,
+  Settings,
 } from 'lucide-react';
 
 export default function BudgetsPage() {
   const { profile, budgets, transactions, updateBudgetLimit, expenseCategories } = usePersonalFinance();
 
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState(expenseCategories[0] || 'Food & Dining Out');
+  const [selectedCategory, setSelectedCategory] = useState(expenseCategories[0] || '');
   const [limitAmount, setLimitAmount] = useState('5000');
 
   // Calculate monthly spent for each budget category
@@ -34,7 +35,7 @@ export default function BudgetsPage() {
   const handleSaveBudget = (e: React.FormEvent) => {
     e.preventDefault();
     const amt = parseFloat(limitAmount) || 0;
-    if (amt <= 0) return;
+    if (amt <= 0 || !selectedCategory) return;
 
     updateBudgetLimit(selectedCategory, amt);
     setIsEditOpen(false);
@@ -57,7 +58,7 @@ export default function BudgetsPage() {
 
         <button
           onClick={() => {
-            setSelectedCategory(EXPENSE_CATEGORIES[0]);
+            setSelectedCategory(expenseCategories[0] || '');
             setLimitAmount('5000');
             setIsEditOpen(true);
           }}
@@ -167,49 +168,77 @@ export default function BudgetsPage() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in select-none">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl select-text">
             <h3 className="text-base font-bold text-slate-900">Set Category Budget Limit</h3>
-            <form onSubmit={handleSaveBudget} className="mt-4 space-y-3 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700">Expense Category</label>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs focus:border-blue-600 focus:outline-none"
-                >
-                  {expenseCategories.map((c: string) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
+            
+            {expenseCategories.length === 0 ? (
+              <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center space-y-3 text-xs">
+                <p className="text-slate-600">
+                  You haven't created any <strong>Expense Categories</strong> yet. Please add custom categories in Settings first.
+                </p>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditOpen(false)}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-white"
+                  >
+                    Close
+                  </button>
+                  <Link
+                    href="/settings"
+                    onClick={() => setIsEditOpen(false)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-700 shadow-sm"
+                  >
+                    <Settings size={13} />
+                    <span>Go to Category Settings</span>
+                  </Link>
+                </div>
               </div>
+            ) : (
+              <form onSubmit={handleSaveBudget} className="mt-4 space-y-3 text-xs">
+                <div>
+                  <label className="block font-semibold text-slate-700">Expense Category</label>
+                  <select
+                    value={selectedCategory}
+                    required
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs focus:border-blue-600 focus:outline-none"
+                  >
+                    <option value="" disabled>Select Category</option>
+                    {expenseCategories.map((c: string) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700">Monthly Spending Limit (₹) *</label>
-                <input
-                  type="number"
-                  step="100"
-                  required
-                  placeholder="5000"
-                  value={limitAmount}
-                  onChange={(e) => setLimitAmount(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-base font-bold focus:border-blue-600 focus:outline-none"
-                />
-              </div>
+                <div>
+                  <label className="block font-semibold text-slate-700">Monthly Spending Limit ({profile.currencySymbol}) *</label>
+                  <input
+                    type="number"
+                    step="100"
+                    required
+                    placeholder="5000"
+                    value={limitAmount}
+                    onChange={(e) => setLimitAmount(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-base font-bold focus:border-blue-600 focus:outline-none"
+                  />
+                </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsEditOpen(false)}
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700"
-                >
-                  Save Budget
-                </button>
-              </div>
-            </form>
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditOpen(false)}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700"
+                  >
+                    Save Budget
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

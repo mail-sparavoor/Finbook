@@ -60,11 +60,11 @@ export default function EditTransactionModal({ isOpen, onClose, transaction }: E
 
   const currentCategoryList = type === 'EXPENSE' ? expenseCategories : incomeCategories;
 
-  const handleSaveCustomCategory = (e?: React.MouseEvent | React.KeyboardEvent) => {
+  const handleSaveCustomCategory = async (e?: React.MouseEvent | React.KeyboardEvent) => {
     if (e) e.preventDefault();
     if (!customCategoryInput.trim()) return;
 
-    const newCat = addCategory(type, customCategoryInput);
+    const newCat = await addCategory(type, customCategoryInput);
     if (newCat) {
       setCategory(newCat);
       setCustomCategoryInput('');
@@ -136,7 +136,7 @@ export default function EditTransactionModal({ isOpen, onClose, transaction }: E
                 onClick={() => {
                   setType('EXPENSE');
                   if (!expenseCategories.includes(category)) {
-                    setCategory(expenseCategories[0] || 'Other Expense');
+                    setCategory(expenseCategories[0] || '');
                   }
                 }}
                 className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition ${
@@ -150,7 +150,7 @@ export default function EditTransactionModal({ isOpen, onClose, transaction }: E
                 onClick={() => {
                   setType('INCOME');
                   if (!incomeCategories.includes(category)) {
-                    setCategory(incomeCategories[0] || 'Other Income');
+                    setCategory(incomeCategories[0] || '');
                   }
                 }}
                 className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition ${
@@ -180,7 +180,7 @@ export default function EditTransactionModal({ isOpen, onClose, transaction }: E
             {/* Category & Date */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="block font-semibold text-slate-700">Category</label>
+                <label className="block font-semibold text-slate-700">Category *</label>
                 {!isAddingCustomCategory ? (
                   <button
                     type="button"
@@ -200,16 +200,16 @@ export default function EditTransactionModal({ isOpen, onClose, transaction }: E
                 )}
               </div>
 
-              {isAddingCustomCategory ? (
-                <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-2.5 space-y-2">
+              {isAddingCustomCategory || currentCategoryList.length === 0 ? (
+                <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3 space-y-2">
                   <div className="text-[11px] font-semibold text-blue-900">
-                    Create Custom {type === 'EXPENSE' ? 'Expense' : 'Income'} Category:
+                    {currentCategoryList.length === 0 ? 'No categories yet. Add your first category:' : `Create Custom ${type === 'EXPENSE' ? 'Expense' : 'Income'} Category:`}
                   </div>
                   <div className="flex gap-2">
                     <input
                       type="text"
                       autoFocus
-                      placeholder="e.g. Subscriptions, Groceries..."
+                      placeholder="e.g. Subscriptions, Groceries, Salary..."
                       value={customCategoryInput}
                       onChange={(e) => setCustomCategoryInput(e.target.value)}
                       onKeyDown={(e) => {
@@ -235,6 +235,7 @@ export default function EditTransactionModal({ isOpen, onClose, transaction }: E
                   <div>
                     <select
                       value={category}
+                      required
                       onChange={(e) => {
                         if (e.target.value === '__ADD_NEW__') {
                           setIsAddingCustomCategory(true);
@@ -244,6 +245,7 @@ export default function EditTransactionModal({ isOpen, onClose, transaction }: E
                       }}
                       className="w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs focus:border-blue-600 focus:outline-none"
                     >
+                      <option value="" disabled>Select Category</option>
                       {currentCategoryList.map((c: string) => (
                         <option key={c} value={c}>{c}</option>
                       ))}
@@ -268,7 +270,7 @@ export default function EditTransactionModal({ isOpen, onClose, transaction }: E
                 </div>
               )}
 
-              {isAddingCustomCategory && (
+              {(isAddingCustomCategory || currentCategoryList.length === 0) && (
                 <div>
                   <label className="block font-semibold text-slate-700 mt-2 mb-1">Date</label>
                   <input
@@ -280,6 +282,7 @@ export default function EditTransactionModal({ isOpen, onClose, transaction }: E
                   />
                 </div>
               )}
+
             </div>
 
             {/* Payment Mode */}

@@ -71,6 +71,16 @@ export interface PersonalBudget {
   icon?: string;
 }
 
+export interface UserCategory {
+  id: string;
+  userId: string;
+  name: string;
+  type: 'EXPENSE' | 'INCOME';
+  color?: string;
+  icon?: string;
+  createdAt?: string;
+}
+
 export interface PersonalProfile {
   name: string;
   email?: string;

@@ -15,8 +15,8 @@ export async function GET(request: Request) {
 
     await ensureBooksSchema();
 
-    // Run all 5 queries in parallel in a single connection batch
-    const [booksRes, txRes, duesRes, budgetsRes, contactsRes]: any = await Promise.all([
+    // Run all 6 queries in parallel in a single connection batch
+    const [booksRes, txRes, duesRes, budgetsRes, contactsRes, categoriesRes]: any = await Promise.all([
       // 1. Books
       pool.query(
         `SELECT id, user_id as userId, name, description, currency, currency_symbol as currencySymbol, color, icon, is_default as isDefault, created_at as createdAt 
@@ -45,6 +45,12 @@ export async function GET(request: Request) {
       pool.query(
         `SELECT id, user_id as userId, book_id as bookId, name, phone, notes, created_at as createdAt 
          FROM contacts WHERE user_id = ? ORDER BY name ASC`,
+        [userId]
+      ),
+      // 6. Categories
+      pool.query(
+        `SELECT id, user_id as userId, name, type, color, icon, created_at as createdAt 
+         FROM categories WHERE user_id = ? ORDER BY name ASC`,
         [userId]
       ),
     ]);
@@ -79,6 +85,7 @@ export async function GET(request: Request) {
 
     const budgets = budgetsRes[0] || [];
     const contacts = contactsRes[0] || [];
+    const categories = categoriesRes[0] || [];
 
     // If user has no book yet, create default book
     if (books.length === 0) {
@@ -130,6 +137,7 @@ export async function GET(request: Request) {
         dues,
         budgets,
         contacts,
+        categories,
       },
     });
   } catch (error: any) {

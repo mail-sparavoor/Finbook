@@ -8,6 +8,7 @@ import {
   PersonalProfile,
   PersonContact,
   PersonalBook,
+  UserCategory,
   TransactionType,
   DueType,
 } from './types';
@@ -104,9 +105,12 @@ interface PersonalContextType {
   updateBudgetLimit: (category: string, monthlyLimit: number) => void;
 
   // Categories & Payment Modes
+  categories: UserCategory[];
   expenseCategories: string[];
   incomeCategories: string[];
-  addCategory: (type: 'EXPENSE' | 'INCOME', categoryName: string) => string;
+  addCategory: (type: 'EXPENSE' | 'INCOME', categoryName: string, color?: string) => Promise<string>;
+  updateCategory: (id: string, newName: string, color?: string) => Promise<{ success: boolean; error?: string }>;
+  deleteCategory: (id: string) => Promise<{ success: boolean; error?: string }>;
   paymentModes: string[];
   addPaymentMode: (modeName: string) => string;
 
@@ -147,10 +151,18 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
   const [rawContacts, setRawContacts] = useState<PersonContact[]>([]);
   const [rawBudgets, setRawBudgets] = useState<PersonalBudget[]>([]);
 
-  const [expenseCategories, setExpenseCategories] = useState<string[]>(EXPENSE_CATEGORIES);
-  const [incomeCategories, setIncomeCategories] = useState<string[]>(INCOME_CATEGORIES);
+  const [rawCategories, setRawCategories] = useState<UserCategory[]>([]);
   const [paymentModes, setPaymentModes] = useState<string[]>(DEFAULT_PAYMENT_MODES);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const expenseCategories = useMemo(
+    () => rawCategories.filter((c) => c.type === 'EXPENSE').map((c) => c.name),
+    [rawCategories]
+  );
+  const incomeCategories = useMemo(
+    () => rawCategories.filter((c) => c.type === 'INCOME').map((c) => c.name),
+    [rawCategories]
+  );
 
   // 1. Instant hydration from localStorage on user change
   useEffect(() => {
@@ -165,6 +177,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
           if (Array.isArray(parsed.dues)) setRawDues(parsed.dues);
           if (Array.isArray(parsed.budgets)) setRawBudgets(parsed.budgets);
           if (Array.isArray(parsed.contacts)) setRawContacts(parsed.contacts);
+          if (Array.isArray(parsed.categories)) setRawCategories(parsed.categories);
         }
       }
 
@@ -183,6 +196,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
       dues?: PersonalDue[];
       budgets?: PersonalBudget[];
       contacts?: PersonContact[];
+      categories?: UserCategory[];
     }) => {
       if (!userId || typeof window === 'undefined') return;
       try {
@@ -194,11 +208,12 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
           dues: data.dues ?? parsed.dues ?? rawDues,
           budgets: data.budgets ?? parsed.budgets ?? rawBudgets,
           contacts: data.contacts ?? parsed.contacts ?? rawContacts,
+          categories: data.categories ?? parsed.categories ?? rawCategories,
         };
         localStorage.setItem(`finbook_cache_v2_${userId}`, JSON.stringify(merged));
       } catch {}
     },
-    [userId, books, rawTransactions, rawDues, rawBudgets, rawContacts]
+    [userId, books, rawTransactions, rawDues, rawBudgets, rawContacts, rawCategories]
   );
 
   // Active Book Object
@@ -272,7 +287,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
 
       const json = await res.json();
       if (json.success && json.data) {
-        const { books: serverBooks, transactions: serverTx, dues: serverDues, budgets: serverBudgets, contacts: serverContacts } = json.data;
+        const { books: serverBooks, transactions: serverTx, dues: serverDues, budgets: serverBudgets, contacts: serverContacts, categories: serverCategories } = json.data;
 
         if (Array.isArray(serverBooks) && serverBooks.length > 0) {
           setBooks(serverBooks);
@@ -289,6 +304,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
         if (Array.isArray(serverDues)) setRawDues(serverDues);
         if (Array.isArray(serverBudgets)) setRawBudgets(serverBudgets);
         if (Array.isArray(serverContacts)) setRawContacts(serverContacts);
+        if (Array.isArray(serverCategories)) setRawCategories(serverCategories);
 
         // Update local cache
         if (typeof window !== 'undefined') {
@@ -300,6 +316,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
               dues: serverDues,
               budgets: serverBudgets,
               contacts: serverContacts,
+              categories: serverCategories || [],
             })
           );
         }
@@ -425,15 +442,120 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     }
   };
 
-  const addCategory = (type: 'EXPENSE' | 'INCOME', categoryName: string): string => {
+  const addCategory = async (type: 'EXPENSE' | 'INCOME', categoryName: string, color?: string): Promise<string> => {
     const trimmed = categoryName.trim();
-    if (!trimmed) return '';
-    if (type === 'EXPENSE') {
-      setExpenseCategories((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
-    } else {
-      setIncomeCategories((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
-    }
+    if (!trimmed || !userId) return '';
+
+    // Check if already exists in user's category list
+    const existing = rawCategories.find(
+      (c) => c.type === type && c.name.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (existing) return existing.name;
+
+    const newCatId = `cat-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const newCategory: UserCategory = {
+      id: newCatId,
+      userId,
+      name: trimmed,
+      type,
+      color: color || (type === 'EXPENSE' ? '#ef4444' : '#10b981'),
+      icon: 'Tag',
+      createdAt: new Date().toISOString(),
+    };
+
+    // Optimistic UI update
+    setRawCategories((prev) => {
+      const updated = [...prev, newCategory];
+      persistCache({ categories: updated });
+      return updated;
+    });
+
+    // Async sync to MySQL
+    try {
+      fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: newCatId,
+          userId,
+          name: trimmed,
+          type,
+          color: newCategory.color,
+        }),
+      }).catch((err) => console.error('Failed to save category to MySQL', err));
+    } catch {}
+
     return trimmed;
+  };
+
+  const updateCategory = async (id: string, newName: string, color?: string): Promise<{ success: boolean; error?: string }> => {
+    const trimmed = newName.trim();
+    if (!trimmed || !userId) return { success: false, error: 'Category name is required' };
+
+    const targetCat = rawCategories.find((c) => c.id === id);
+    if (!targetCat) return { success: false, error: 'Category not found' };
+
+    const oldName = targetCat.name;
+
+    // Optimistic UI update for categories
+    setRawCategories((prev) => {
+      const updated = prev.map((c) => (c.id === id ? { ...c, name: trimmed, color: color || c.color } : c));
+      persistCache({ categories: updated });
+      return updated;
+    });
+
+    // If name changed, also update local transactions and budgets that used oldName
+    if (oldName !== trimmed) {
+      setRawTransactions((prev) => {
+        const updated = prev.map((t) => (t.category === oldName ? { ...t, category: trimmed } : t));
+        persistCache({ transactions: updated });
+        return updated;
+      });
+
+      setRawBudgets((prev) => {
+        const updated = prev.map((b) => (b.category === oldName ? { ...b, category: trimmed } : b));
+        persistCache({ budgets: updated });
+        return updated;
+      });
+    }
+
+    try {
+      const res = await fetch('/api/categories', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          userId,
+          name: trimmed,
+          oldName,
+          color,
+        }),
+      });
+      const json = await res.json();
+      return json;
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Failed to update category' };
+    }
+  };
+
+  const deleteCategory = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    if (!userId) return { success: false, error: 'User ID is required' };
+
+    setRawCategories((prev) => {
+      const updated = prev.filter((c) => c.id !== id);
+      persistCache({ categories: updated });
+      return updated;
+    });
+
+    try {
+      const res = await fetch(`/api/categories?id=${encodeURIComponent(id)}&userId=${encodeURIComponent(userId)}`, {
+        method: 'DELETE',
+      });
+      const json = await res.json();
+      return json;
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Failed to delete category' };
+    }
   };
 
   const addPaymentMode = (modeName: string): string => {
@@ -891,8 +1013,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     setRawDues(SEED_DUES);
     setRawContacts(SEED_CONTACTS);
     setRawBudgets(SEED_BUDGETS);
-    setExpenseCategories(EXPENSE_CATEGORIES);
-    setIncomeCategories(INCOME_CATEGORIES);
+    setRawCategories([]);
     setPaymentModes(DEFAULT_PAYMENT_MODES);
     if (typeof window !== 'undefined' && userId) {
       localStorage.removeItem(`finbook_cache_v2_${userId}`);
@@ -1022,9 +1143,12 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
         deleteDue,
         budgets,
         updateBudgetLimit,
+        categories: rawCategories,
         expenseCategories,
         incomeCategories,
         addCategory,
+        updateCategory,
+        deleteCategory,
         paymentModes,
         addPaymentMode,
         searchQuery,

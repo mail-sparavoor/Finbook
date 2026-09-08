@@ -48,7 +48,7 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
 
   // Common form fields
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState(expenseCategories[0] || 'Other Expense');
+  const [category, setCategory] = useState(expenseCategories[0] || '');
   const [paymentMode, setPaymentMode] = useState(paymentModes[0] || 'Online / UPI');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
@@ -88,11 +88,11 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
     }, 1000);
   };
 
-  const handleSaveCustomCategory = (e?: React.MouseEvent | React.KeyboardEvent) => {
+  const handleSaveCustomCategory = async (e?: React.MouseEvent | React.KeyboardEvent) => {
     if (e) e.preventDefault();
     if (!customCategoryInput.trim()) return;
 
-    const newCat = addCategory(activeTab === 'EXPENSE' ? 'EXPENSE' : 'INCOME', customCategoryInput);
+    const newCat = await addCategory(activeTab === 'EXPENSE' ? 'EXPENSE' : 'INCOME', customCategoryInput);
     if (newCat) {
       setCategory(newCat);
       setCustomCategoryInput('');
@@ -185,7 +185,7 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
                 onClick={() => {
                   setActiveTab('INCOME');
                   setIsAddingCustomCategory(false);
-                  setCategory(incomeCategories[0] || 'Other Income');
+                  setCategory(incomeCategories[0] || '');
                 }}
                 className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition ${
                   activeTab === 'INCOME' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
@@ -198,7 +198,7 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
                 onClick={() => {
                   setActiveTab('EXPENSE');
                   setIsAddingCustomCategory(false);
-                  setCategory(expenseCategories[0] || 'Other Expense');
+                  setCategory(expenseCategories[0] || '');
                 }}
                 className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition ${
                   activeTab === 'EXPENSE' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
@@ -245,7 +245,7 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
                 <>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <label className="block font-semibold text-slate-700">Category</label>
+                      <label className="block font-semibold text-slate-700">Category *</label>
                       {!isAddingCustomCategory ? (
                         <button
                           type="button"
@@ -265,16 +265,16 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
                       )}
                     </div>
 
-                    {isAddingCustomCategory ? (
-                      <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-2.5 space-y-2">
+                    {isAddingCustomCategory || currentCategoryList.length === 0 ? (
+                      <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3 space-y-2">
                         <div className="text-[11px] font-semibold text-blue-900">
-                          Create Custom {activeTab === 'EXPENSE' ? 'Expense' : 'Income'} Category:
+                          {currentCategoryList.length === 0 ? 'No categories yet. Add your first category:' : `Create Custom ${activeTab === 'EXPENSE' ? 'Expense' : 'Income'} Category:`}
                         </div>
                         <div className="flex gap-2">
                           <input
                             type="text"
                             autoFocus
-                            placeholder="e.g. Pet Care, Gym, Tools..."
+                            placeholder="e.g. Groceries, Fuel, Salary, Freelance..."
                             value={customCategoryInput}
                             onChange={(e) => setCustomCategoryInput(e.target.value)}
                             onKeyDown={(e) => {
@@ -300,6 +300,7 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
                         <div>
                           <select
                             value={category}
+                            required
                             onChange={(e) => {
                               if (e.target.value === '__ADD_NEW__') {
                                 setIsAddingCustomCategory(true);
@@ -309,6 +310,7 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
                             }}
                             className="w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs focus:border-blue-600 focus:outline-none"
                           >
+                            <option value="" disabled>Select Category</option>
                             {currentCategoryList.map((c: string) => (
                               <option key={c} value={c}>{c}</option>
                             ))}
@@ -330,7 +332,7 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
                       </div>
                     )}
 
-                    {isAddingCustomCategory && (
+                    {(isAddingCustomCategory || currentCategoryList.length === 0) && (
                       <div>
                         <label className="block font-semibold text-slate-700 mt-2 mb-1">Date</label>
                         <input

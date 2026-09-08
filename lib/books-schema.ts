@@ -9,23 +9,39 @@ declare global {
 export async function ensureBooksSchema() {
   if (globalThis.booksSchemaInitialized) return;
   try {
-    // 1. Create books table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS books (
-        id VARCHAR(64) PRIMARY KEY,
-        user_id VARCHAR(64) NOT NULL,
-        name VARCHAR(100) NOT NULL,
-        description TEXT NULL,
-        currency VARCHAR(10) NOT NULL DEFAULT 'INR',
-        currency_symbol VARCHAR(10) NOT NULL DEFAULT '₹',
-        color VARCHAR(30) NOT NULL DEFAULT '#2563eb',
-        icon VARCHAR(50) NOT NULL DEFAULT 'BookOpen',
-        is_default BOOLEAN NOT NULL DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_books_user (user_id)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-    `);
+    // 1. Create books and categories tables
+    await Promise.all([
+      pool.query(`
+        CREATE TABLE IF NOT EXISTS books (
+          id VARCHAR(64) PRIMARY KEY,
+          user_id VARCHAR(64) NOT NULL,
+          name VARCHAR(100) NOT NULL,
+          description TEXT NULL,
+          currency VARCHAR(10) NOT NULL DEFAULT 'INR',
+          currency_symbol VARCHAR(10) NOT NULL DEFAULT '₹',
+          color VARCHAR(30) NOT NULL DEFAULT '#2563eb',
+          icon VARCHAR(50) NOT NULL DEFAULT 'BookOpen',
+          is_default BOOLEAN NOT NULL DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_books_user (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `),
+      pool.query(`
+        CREATE TABLE IF NOT EXISTS categories (
+          id VARCHAR(64) PRIMARY KEY,
+          user_id VARCHAR(64) NOT NULL,
+          name VARCHAR(100) NOT NULL,
+          type ENUM('EXPENSE', 'INCOME') NOT NULL,
+          color VARCHAR(30) NULL DEFAULT '#2563eb',
+          icon VARCHAR(50) NULL DEFAULT 'Tag',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_categories_user (user_id),
+          UNIQUE KEY uniq_user_category (user_id, type, name)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `),
+    ]);
 
     // 2. Check and add columns in parallel
     const [cols]: any = await pool.query(`
