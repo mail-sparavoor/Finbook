@@ -3,7 +3,6 @@
 import React, { useState, useMemo } from 'react';
 import { usePersonalFinance } from '@/lib/personal-context';
 import { formatCurrency } from '@/lib/finance-math';
-import { INCOME_CATEGORIES, EXPENSE_CATEGORIES } from '@/lib/storage';
 import { PersonalTransaction } from '@/lib/types';
 import {
   Search,
@@ -16,19 +15,26 @@ import {
   Edit2,
   Calendar,
   RotateCcw,
+  ArrowUpDown,
   Filter,
-  X,
 } from 'lucide-react';
 import QuickAddModal from '@/components/modals/QuickAddModal';
 import EditTransactionModal from '@/components/modals/EditTransactionModal';
+
+export type SortOption =
+  | 'DATE_DESC'
+  | 'DATE_ASC'
+  | 'AMOUNT_DESC'
+  | 'AMOUNT_ASC'
+  | 'CATEGORY_ASC';
 
 export default function TransactionsPage() {
   const {
     profile,
     transactions,
     deleteTransaction,
+    categoryNames,
     expenseCategories,
-    incomeCategories,
     paymentModes,
   } = usePersonalFinance();
 
@@ -46,6 +52,8 @@ export default function TransactionsPage() {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedPaymentMode, setSelectedPaymentMode] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('DATE_DESC');
+
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [quickAddTab, setQuickAddTab] = useState<'EXPENSE' | 'INCOME' | 'DUE'>('EXPENSE');
   const [editingTransaction, setEditingTransaction] = useState<PersonalTransaction | null>(null);
@@ -64,8 +72,10 @@ export default function TransactionsPage() {
   }, []);
 
   const allCategories = useMemo(() => {
-    return Array.from(new Set([...incomeCategories, ...expenseCategories]));
-  }, [incomeCategories, expenseCategories]);
+    const list = categoryNames || expenseCategories || [];
+    const fromTx = transactions.map((t) => t.category).filter(Boolean);
+    return Array.from(new Set([...list, ...fromTx]));
+  }, [categoryNames, expenseCategories, transactions]);
 
   // Derive unique recorded months from user transactions
   const availableMonths = useMemo(() => {
@@ -97,9 +107,10 @@ export default function TransactionsPage() {
       dateFilterMode !== 'ALL' ||
       selectedCategory !== 'ALL' ||
       selectedPaymentMode !== 'ALL' ||
-      searchQuery.trim() !== ''
+      searchQuery.trim() !== '' ||
+      sortBy !== 'DATE_DESC'
     );
-  }, [activeTab, dateFilterMode, selectedCategory, selectedPaymentMode, searchQuery]);
+  }, [activeTab, dateFilterMode, selectedCategory, selectedPaymentMode, searchQuery, sortBy]);
 
   const handleResetFilters = () => {
     setActiveTab('ALL');
@@ -111,10 +122,12 @@ export default function TransactionsPage() {
     setSelectedCategory('ALL');
     setSelectedPaymentMode('ALL');
     setSearchQuery('');
+    setSortBy('DATE_DESC');
   };
 
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter((t: PersonalTransaction) => {
+  // Filter & Sort Transactions
+  const filteredAndSortedTransactions = useMemo(() => {
+    const filtered = transactions.filter((t: PersonalTransaction) => {
       if (activeTab !== 'ALL' && t.type !== activeTab) return false;
       if (selectedCategory !== 'ALL' && t.category !== selectedCategory) return false;
       if (selectedPaymentMode !== 'ALL' && (t.paymentMode || 'Online / UPI') !== selectedPaymentMode) return false;
@@ -145,6 +158,29 @@ export default function TransactionsPage() {
       }
       return true;
     });
+
+    return [...filtered].sort((a: PersonalTransaction, b: PersonalTransaction) => {
+      if (sortBy === 'DATE_DESC') {
+        const dateCmp = (b.date || '').localeCompare(a.date || '');
+        if (dateCmp !== 0) return dateCmp;
+        return (b.createdAt || '').localeCompare(a.createdAt || '');
+      }
+      if (sortBy === 'DATE_ASC') {
+        const dateCmp = (a.date || '').localeCompare(b.date || '');
+        if (dateCmp !== 0) return dateCmp;
+        return (a.createdAt || '').localeCompare(b.createdAt || '');
+      }
+      if (sortBy === 'AMOUNT_DESC') {
+        return b.amount - a.amount;
+      }
+      if (sortBy === 'AMOUNT_ASC') {
+        return a.amount - b.amount;
+      }
+      if (sortBy === 'CATEGORY_ASC') {
+        return a.category.localeCompare(b.category);
+      }
+      return 0;
+    });
   }, [
     transactions,
     activeTab,
@@ -156,23 +192,87 @@ export default function TransactionsPage() {
     customStartDate,
     customEndDate,
     searchQuery,
+    sortBy,
     todayStr,
     yesterdayStr,
     thisMonthStr,
     lastMonthStr,
   ]);
 
+  // Group by date when sorted by Date (DESC or ASC)
+  const dateGroupedTransactions = useMemo(() => {
+    if (sortBy !== 'DATE_DESC' && sortBy !== 'DATE_ASC') {
+      return null;
+    }
+
+    const groups: {
+      date: string;
+      formattedDate: string;
+      transactions: PersonalTransaction[];
+      dayIncome: number;
+      dayExpense: number;
+      dayNet: number;
+    }[] = [];
+
+    const groupMap = new Map<string, PersonalTransaction[]>();
+
+    filteredAndSortedTransactions.forEach((tx) => {
+      const dateKey = tx.date || 'No Date';
+      if (!groupMap.has(dateKey)) {
+        groupMap.set(dateKey, []);
+      }
+      groupMap.get(dateKey)!.push(tx);
+    });
+
+    groupMap.forEach((txList, dateKey) => {
+      let formattedDate = dateKey;
+      if (dateKey === todayStr) {
+        formattedDate = 'Today';
+      } else if (dateKey === yesterdayStr) {
+        formattedDate = 'Yesterday';
+      } else if (dateKey !== 'No Date') {
+        try {
+          const [y, m, d] = dateKey.split('-').map(Number);
+          const dateObj = new Date(y, m - 1, d);
+          if (!isNaN(dateObj.getTime())) {
+            formattedDate = dateObj.toLocaleDateString('default', {
+              weekday: 'short',
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+            });
+          }
+        } catch {}
+      }
+
+      const dayIncome = txList.filter((t) => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0);
+      const dayExpense = txList.filter((t) => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0);
+      const dayNet = dayIncome - dayExpense;
+
+      groups.push({
+        date: dateKey,
+        formattedDate,
+        transactions: txList,
+        dayIncome,
+        dayExpense,
+        dayNet,
+      });
+    });
+
+    return groups;
+  }, [filteredAndSortedTransactions, sortBy, todayStr, yesterdayStr]);
+
   const filteredIncome = useMemo(() => {
-    return filteredTransactions
+    return filteredAndSortedTransactions
       .filter((t: PersonalTransaction) => t.type === 'INCOME')
       .reduce((sum: number, t: PersonalTransaction) => sum + t.amount, 0);
-  }, [filteredTransactions]);
+  }, [filteredAndSortedTransactions]);
 
   const filteredExpense = useMemo(() => {
-    return filteredTransactions
+    return filteredAndSortedTransactions
       .filter((t: PersonalTransaction) => t.type === 'EXPENSE')
       .reduce((sum: number, t: PersonalTransaction) => sum + t.amount, 0);
-  }, [filteredTransactions]);
+  }, [filteredAndSortedTransactions]);
 
   const totalFilteredAmount = useMemo(() => {
     return filteredIncome - filteredExpense;
@@ -180,7 +280,7 @@ export default function TransactionsPage() {
 
   const handleExportCSV = () => {
     const headers = ['Date', 'Type', 'Category', 'Payment Mode', 'Amount', 'Notes'];
-    const rows = filteredTransactions.map((t: PersonalTransaction) => [
+    const rows = filteredAndSortedTransactions.map((t: PersonalTransaction) => [
       t.date,
       t.type,
       t.category,
@@ -455,23 +555,25 @@ export default function TransactionsPage() {
           </div>
         )}
 
-        {/* Filter Dropdowns, Search & Reset */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-100 items-center">
-          <div className="relative">
+        {/* Filter Dropdowns, Sort Selector, Search & Reset */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2.5 pt-2 border-t border-slate-100 items-center">
+          {/* Search */}
+          <div className="relative col-span-1 sm:col-span-2 md:col-span-1 lg:col-span-1">
             <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
             <input
               type="text"
-              placeholder="Search category, notes, mode, person..."
+              placeholder="Search entry, notes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-8 pr-3 py-1.5 text-xs focus:border-blue-600 focus:bg-white focus:outline-none"
             />
           </div>
 
+          {/* Category */}
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-1.5 text-xs text-slate-700 focus:border-blue-600 focus:outline-none"
+            className="rounded-lg border border-slate-200 bg-slate-50/50 px-2.5 py-1.5 text-xs text-slate-700 focus:border-blue-600 focus:outline-none"
           >
             <option value="ALL">All Categories</option>
             {allCategories.map((c: string) => (
@@ -479,10 +581,11 @@ export default function TransactionsPage() {
             ))}
           </select>
 
+          {/* Payment Mode */}
           <select
             value={selectedPaymentMode}
             onChange={(e) => setSelectedPaymentMode(e.target.value)}
-            className="rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-1.5 text-xs text-slate-700 focus:border-blue-600 focus:outline-none"
+            className="rounded-lg border border-slate-200 bg-slate-50/50 px-2.5 py-1.5 text-xs text-slate-700 focus:border-blue-600 focus:outline-none"
           >
             <option value="ALL">All Payment Modes</option>
             {paymentModes.map((m: string) => (
@@ -490,6 +593,22 @@ export default function TransactionsPage() {
             ))}
           </select>
 
+          {/* Sort By Selector */}
+          <div className="relative">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              className="w-full rounded-lg border border-blue-200 bg-blue-50/40 px-2.5 py-1.5 text-xs font-semibold text-blue-900 focus:border-blue-600 focus:outline-none"
+            >
+              <option value="DATE_DESC">Date: Newest First</option>
+              <option value="DATE_ASC">Date: Oldest First</option>
+              <option value="AMOUNT_DESC">Amount: High to Low</option>
+              <option value="AMOUNT_ASC">Amount: Low to High</option>
+              <option value="CATEGORY_ASC">Category: A to Z</option>
+            </select>
+          </div>
+
+          {/* Reset Filters */}
           {hasActiveFilters && (
             <button
               type="button"
@@ -497,7 +616,7 @@ export default function TransactionsPage() {
               className="flex items-center justify-center gap-1 rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200 transition"
             >
               <RotateCcw size={12} />
-              <span>Reset Filters</span>
+              <span>Reset</span>
             </button>
           )}
         </div>
@@ -505,114 +624,199 @@ export default function TransactionsPage() {
 
       {/* Transactions Container */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        {/* Mobile View: Native Card List */}
-        <div className="sm:hidden divide-y divide-slate-100">
-          {filteredTransactions.length === 0 ? (
-            <div className="py-12 text-center text-xs text-slate-400">
-              No transactions match the selected filters.
-            </div>
-          ) : (
-            filteredTransactions.map((tx: PersonalTransaction) => (
-              <div key={tx.id} className="p-3.5 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-bold ${
-                    tx.type === 'INCOME' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-700'
-                  }`}>
-                    {tx.type === 'INCOME' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold text-slate-900 truncate">{tx.category}</div>
-                    <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-                      <span className="font-mono">{tx.date}</span>
-                      {tx.paymentMode && <span>• {tx.paymentMode}</span>}
-                    </div>
-                    {tx.notes && <div className="text-[11px] text-slate-500 truncate mt-0.5">{tx.notes}</div>}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0 text-right">
-                  <div className={`text-xs font-bold font-mono ${
-                    tx.type === 'INCOME' ? 'text-blue-700' : 'text-slate-900'
-                  }`}>
-                    {tx.type === 'INCOME' ? '+' : '-'} {formatCurrency(tx.amount, profile.currencySymbol)}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setEditingTransaction(tx)}
-                      className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
-                      title="Edit Transaction"
-                    >
-                      <Edit2 size={13} />
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (confirm('Delete this transaction?')) deleteTransaction(tx.id);
-                      }}
-                      className="p-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition"
-                      title="Delete"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </div>
+        {/* Render Date Grouped View (When sorted by Date DESC or ASC) */}
+        {dateGroupedTransactions !== null ? (
+          <div>
+            {dateGroupedTransactions.length === 0 ? (
+              <div className="py-12 text-center text-xs text-slate-400">
+                No transactions match the selected filters.
               </div>
-            ))
-          )}
-        </div>
+            ) : (
+              dateGroupedTransactions.map((group) => (
+                <div key={group.date} className="border-b border-slate-100 last:border-b-0">
+                  {/* Date Section Header */}
+                  <div className="sticky top-0 z-10 flex items-center justify-between bg-slate-50/90 backdrop-blur-xs px-4 py-2 border-y border-slate-200/70 text-xs">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-600 text-white font-bold">
+                        <Calendar size={12} />
+                      </div>
+                      <span className="font-bold text-slate-900">
+                        {group.formattedDate}
+                      </span>
+                      {group.date !== group.formattedDate && (
+                        <span className="text-[11px] font-mono text-slate-400">
+                          ({group.date})
+                        </span>
+                      )}
+                      <span className="rounded-full bg-slate-200/70 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                        {group.transactions.length} {group.transactions.length === 1 ? 'entry' : 'entries'}
+                      </span>
+                    </div>
 
-        {/* Desktop View: Table */}
-        <div className="hidden sm:block overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/60 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                <th className="py-3 px-4">Date</th>
-                <th className="py-3 px-4">Type</th>
-                <th className="py-3 px-4">Category</th>
-                <th className="py-3 px-4">Mode</th>
-                <th className="py-3 px-4">Notes</th>
-                <th className="py-3 px-4 text-right">Amount</th>
-                <th className="py-3 px-4 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredTransactions.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center text-xs text-slate-400">
-                    No transactions match the selected filters.
-                  </td>
-                </tr>
-              ) : (
-                filteredTransactions.map((tx: PersonalTransaction) => (
-                  <tr key={tx.id} className="hover:bg-slate-50/80 transition">
-                    <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">{tx.date}</td>
-                    <td className="py-3 px-4">
-                      <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold ${
-                        tx.type === 'INCOME'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-slate-100 text-slate-800'
+                    <div className="flex items-center gap-2 font-mono text-[11px]">
+                      {group.dayIncome > 0 && (
+                        <span className="font-bold text-blue-700">
+                          +{formatCurrency(group.dayIncome, profile.currencySymbol)}
+                        </span>
+                      )}
+                      {group.dayExpense > 0 && (
+                        <span className="font-bold text-slate-700">
+                          -{formatCurrency(group.dayExpense, profile.currencySymbol)}
+                        </span>
+                      )}
+                      <span className={`font-extrabold px-2 py-0.5 rounded text-[11px] ${
+                        group.dayNet >= 0 ? 'bg-blue-100 text-blue-900' : 'bg-slate-200 text-slate-900'
                       }`}>
-                        {tx.type === 'INCOME' ? <ArrowDownLeft size={11} /> : <ArrowUpRight size={11} />}
-                        <span>{tx.type}</span>
+                        Net: {formatCurrency(group.dayNet, profile.currencySymbol)}
                       </span>
-                    </td>
-                    <td className="py-3 px-4 font-semibold text-slate-900">{tx.category}</td>
-                    <td className="py-3 px-4">
-                      <span className="inline-block rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                        {tx.paymentMode || 'Online / UPI'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-slate-500 max-w-xs truncate">{tx.notes || '-'}</td>
-                    <td className={`py-3 px-4 text-right font-bold font-mono ${
-                      tx.type === 'INCOME' ? 'text-blue-700' : 'text-slate-900'
-                    }`}>
-                      {tx.type === 'INCOME' ? '+' : '-'}
-                      {formatCurrency(tx.amount, profile.currencySymbol)}
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
+                    </div>
+                  </div>
+
+                  {/* Mobile View: Cards */}
+                  <div className="sm:hidden divide-y divide-slate-100">
+                    {group.transactions.map((tx: PersonalTransaction) => (
+                      <div key={tx.id} className="p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/50 transition">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-bold ${
+                            tx.type === 'INCOME' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {tx.type === 'INCOME' ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-slate-900 truncate">{tx.category}</div>
+                            <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                              {tx.paymentMode && <span>{tx.paymentMode}</span>}
+                              {tx.personName && <span>• {tx.personName}</span>}
+                            </div>
+                            {tx.notes && <div className="text-[11px] text-slate-500 truncate mt-0.5">{tx.notes}</div>}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0 text-right">
+                          <div className={`text-xs font-bold font-mono ${
+                            tx.type === 'INCOME' ? 'text-blue-700' : 'text-slate-900'
+                          }`}>
+                            {tx.type === 'INCOME' ? '+' : '-'} {formatCurrency(tx.amount, profile.currencySymbol)}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => setEditingTransaction(tx)}
+                              className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
+                              title="Edit Transaction"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm('Delete this transaction?')) deleteTransaction(tx.id);
+                              }}
+                              className="p-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition"
+                              title="Delete"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop View: Rows */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <tbody className="divide-y divide-slate-100">
+                        {group.transactions.map((tx: PersonalTransaction) => (
+                          <tr key={tx.id} className="hover:bg-slate-50/80 transition">
+                            <td className="py-2.5 px-4 w-28">
+                              <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold ${
+                                tx.type === 'INCOME'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-slate-100 text-slate-800'
+                              }`}>
+                                {tx.type === 'INCOME' ? <ArrowDownLeft size={11} /> : <ArrowUpRight size={11} />}
+                                <span>{tx.type}</span>
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-4 font-semibold text-slate-900 w-44">{tx.category}</td>
+                            <td className="py-2.5 px-4 w-36">
+                              <span className="inline-block rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                                {tx.paymentMode || 'Online / UPI'}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-4 text-slate-500 max-w-xs truncate">{tx.notes || '-'}</td>
+                            <td className={`py-2.5 px-4 text-right font-bold font-mono w-36 ${
+                              tx.type === 'INCOME' ? 'text-blue-700' : 'text-slate-900'
+                            }`}>
+                              {tx.type === 'INCOME' ? '+' : '-'}
+                              {formatCurrency(tx.amount, profile.currencySymbol)}
+                            </td>
+                            <td className="py-2.5 px-4 text-right w-24">
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  onClick={() => setEditingTransaction(tx)}
+                                  className="rounded p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
+                                  title="Edit Transaction"
+                                >
+                                  <Edit2 size={13} />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (confirm('Delete this transaction?')) deleteTransaction(tx.id);
+                                  }}
+                                  className="rounded p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                                  title="Delete Transaction"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          /* Render Flat View (When sorted by Amount or Category) */
+          <div>
+            {/* Mobile View */}
+            <div className="sm:hidden divide-y divide-slate-100">
+              {filteredAndSortedTransactions.length === 0 ? (
+                <div className="py-12 text-center text-xs text-slate-400">
+                  No transactions match the selected filters.
+                </div>
+              ) : (
+                filteredAndSortedTransactions.map((tx: PersonalTransaction) => (
+                  <div key={tx.id} className="p-3.5 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-bold ${
+                        tx.type === 'INCOME' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-700'
+                      }`}>
+                        {tx.type === 'INCOME' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-slate-900 truncate">{tx.category}</div>
+                        <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                          <span className="font-mono">{tx.date}</span>
+                          {tx.paymentMode && <span>• {tx.paymentMode}</span>}
+                        </div>
+                        {tx.notes && <div className="text-[11px] text-slate-500 truncate mt-0.5">{tx.notes}</div>}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 text-right">
+                      <div className={`text-xs font-bold font-mono ${
+                        tx.type === 'INCOME' ? 'text-blue-700' : 'text-slate-900'
+                      }`}>
+                        {tx.type === 'INCOME' ? '+' : '-'} {formatCurrency(tx.amount, profile.currencySymbol)}
+                      </div>
+                      <div className="flex items-center gap-1">
                         <button
                           onClick={() => setEditingTransaction(tx)}
-                          className="rounded p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
+                          className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
                           title="Edit Transaction"
                         >
                           <Edit2 size={13} />
@@ -621,19 +825,94 @@ export default function TransactionsPage() {
                           onClick={() => {
                             if (confirm('Delete this transaction?')) deleteTransaction(tx.id);
                           }}
-                          className="rounded p-1 text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
-                          title="Delete Transaction"
+                          className="p-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition"
+                          title="Delete"
                         >
                           <Trash2 size={13} />
                         </button>
                       </div>
-                    </td>
-                  </tr>
+                    </div>
+                  </div>
                 ))
               )}
-            </tbody>
-          </table>
-        </div>
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/60 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    <th className="py-3 px-4">Date</th>
+                    <th className="py-3 px-4">Type</th>
+                    <th className="py-3 px-4">Category</th>
+                    <th className="py-3 px-4">Mode</th>
+                    <th className="py-3 px-4">Notes</th>
+                    <th className="py-3 px-4 text-right">Amount</th>
+                    <th className="py-3 px-4 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredAndSortedTransactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-xs text-slate-400">
+                        No transactions match the selected filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredAndSortedTransactions.map((tx: PersonalTransaction) => (
+                      <tr key={tx.id} className="hover:bg-slate-50/80 transition">
+                        <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">{tx.date}</td>
+                        <td className="py-3 px-4">
+                          <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold ${
+                            tx.type === 'INCOME'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-slate-100 text-slate-800'
+                          }`}>
+                            {tx.type === 'INCOME' ? <ArrowDownLeft size={11} /> : <ArrowUpRight size={11} />}
+                            <span>{tx.type}</span>
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-slate-900">{tx.category}</td>
+                        <td className="py-3 px-4">
+                          <span className="inline-block rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                            {tx.paymentMode || 'Online / UPI'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-slate-500 max-w-xs truncate">{tx.notes || '-'}</td>
+                        <td className={`py-3 px-4 text-right font-bold font-mono ${
+                          tx.type === 'INCOME' ? 'text-blue-700' : 'text-slate-900'
+                        }`}>
+                          {tx.type === 'INCOME' ? '+' : '-'}
+                          {formatCurrency(tx.amount, profile.currencySymbol)}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => setEditingTransaction(tx)}
+                              className="rounded p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
+                              title="Edit Transaction"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm('Delete this transaction?')) deleteTransaction(tx.id);
+                              }}
+                              className="rounded p-1 text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
+                              title="Delete Transaction"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
 
       <QuickAddModal
