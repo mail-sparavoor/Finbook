@@ -33,6 +33,12 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
   const [activeTab, setActiveTab] = useState<'EXPENSE' | 'INCOME' | 'DUE'>(defaultTab);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    if (isOpen) {
+      setActiveTab(defaultTab);
+    }
+  }, [isOpen, defaultTab]);
+
   // Common form fields
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState(expenseCategories[0] || 'Other Expense');
@@ -170,19 +176,6 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
               <button
                 type="button"
                 onClick={() => {
-                  setActiveTab('EXPENSE');
-                  setIsAddingCustomCategory(false);
-                  setCategory(expenseCategories[0] || 'Other Expense');
-                }}
-                className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition ${
-                  activeTab === 'EXPENSE' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Expense (Out)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
                   setActiveTab('INCOME');
                   setIsAddingCustomCategory(false);
                   setCategory(incomeCategories[0] || 'Other Income');
@@ -191,7 +184,20 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
                   activeTab === 'INCOME' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Income (In)
+                Cash In
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('EXPENSE');
+                  setIsAddingCustomCategory(false);
+                  setCategory(expenseCategories[0] || 'Other Expense');
+                }}
+                className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition ${
+                  activeTab === 'EXPENSE' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Cash Out
               </button>
               <button
                 type="button"
@@ -203,7 +209,7 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
                   activeTab === 'DUE' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Due / Loan
+                Loan / Due
               </button>
             </div>
 

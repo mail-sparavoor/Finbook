@@ -16,7 +16,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const { currentUser, isLoading } = useAuth();
 
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [quickAddTab, setQuickAddTab] = useState<'EXPENSE' | 'INCOME' | 'DUE'>('EXPENSE');
   const [searchOpen, setSearchOpen] = useState(false);
+
+  const handleOpenQuickAdd = (tab: 'EXPENSE' | 'INCOME' | 'DUE' = 'EXPENSE') => {
+    setQuickAddTab(tab);
+    setQuickAddOpen(true);
+  };
 
   // Auth & Role Guard
   useEffect(() => {
@@ -81,7 +87,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       {/* Main Content Area */}
       <div className="flex flex-1 flex-col min-w-0 w-full pb-20 md:pb-0">
         <Header
-          onOpenQuickAdd={() => setQuickAddOpen(true)}
+          onOpenQuickAdd={handleOpenQuickAdd}
           onOpenSearch={() => setSearchOpen(true)}
         />
         <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-6xl w-full mx-auto">
@@ -90,12 +96,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       </div>
 
       {/* Mobile Bottom Bar */}
-      <MobileNav onOpenQuickAdd={() => setQuickAddOpen(true)} />
+      <MobileNav onOpenQuickAdd={handleOpenQuickAdd} />
 
       {/* Modals */}
       <QuickAddModal
         isOpen={quickAddOpen}
         onClose={() => setQuickAddOpen(false)}
+        defaultTab={quickAddTab}
       />
       <GlobalSearchModal
         isOpen={searchOpen}

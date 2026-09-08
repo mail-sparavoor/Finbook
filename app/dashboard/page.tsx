@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { usePersonalFinance } from '@/lib/personal-context';
 import { formatCurrency } from '@/lib/finance-math';
 import {
@@ -12,9 +12,11 @@ import {
   CheckCircle,
   Receipt,
   Wallet,
+  Plus,
 } from 'lucide-react';
 import { PersonalTransaction, PersonalDue, PersonalBudget } from '@/lib/types';
 import Link from 'next/link';
+import QuickAddModal from '@/components/modals/QuickAddModal';
 import {
   ResponsiveContainer,
   BarChart,
@@ -29,6 +31,13 @@ import {
 
 export default function PersonalDashboardPage() {
   const { profile, metrics, transactions, dues, budgets } = usePersonalFinance();
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [quickAddTab, setQuickAddTab] = useState<'EXPENSE' | 'INCOME' | 'DUE'>('EXPENSE');
+
+  const handleOpenAction = (tab: 'EXPENSE' | 'INCOME' | 'DUE') => {
+    setQuickAddTab(tab);
+    setIsQuickAddOpen(true);
+  };
 
   // Monthly cash flow trend - calculated dynamically from user's recorded transactions
   const monthlyData = useMemo(() => {
@@ -111,52 +120,79 @@ export default function PersonalDashboardPage() {
           </p>
         </div>
 
-        <div className="rounded-xl bg-white/10 px-4 sm:px-5 py-2.5 sm:py-3 backdrop-blur self-start sm:self-auto sm:text-right">
-          <div className="text-[10px] uppercase font-bold text-blue-200">Total Net Balance</div>
-          <div className="text-xl sm:text-2xl font-extrabold text-white font-mono mt-0.5">
-            {formatCurrency(metrics.totalNetWorth, profile.currencySymbol)}
+        <div className="flex flex-col sm:items-end gap-3 self-start sm:self-auto">
+          <div className="rounded-xl bg-white/10 px-4 sm:px-5 py-2 sm:py-2.5 backdrop-blur w-full sm:w-auto text-left sm:text-right">
+            <div className="text-[10px] uppercase font-bold text-blue-200">Total Net Balance</div>
+            <div className="text-xl sm:text-2xl font-extrabold text-white font-mono mt-0.5">
+              {formatCurrency(metrics.totalNetWorth, profile.currencySymbol)}
+            </div>
+          </div>
+
+          {/* 3 Direct Action Buttons on Dashboard */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <button
+              onClick={() => handleOpenAction('INCOME')}
+              className="flex items-center gap-1 sm:gap-1.5 rounded-xl bg-white text-blue-900 px-3 py-1.5 text-xs font-bold shadow-sm hover:bg-blue-50 active:scale-95 transition"
+            >
+              <ArrowDownLeft size={14} className="text-blue-700 stroke-[2.5]" />
+              <span>Cash In</span>
+            </button>
+            <button
+              onClick={() => handleOpenAction('EXPENSE')}
+              className="flex items-center gap-1 sm:gap-1.5 rounded-xl bg-white/15 text-white border border-white/20 px-3 py-1.5 text-xs font-bold hover:bg-white/25 active:scale-95 transition"
+            >
+              <ArrowUpRight size={14} className="stroke-[2.5]" />
+              <span>Cash Out</span>
+            </button>
+            <button
+              onClick={() => handleOpenAction('DUE')}
+              className="flex items-center gap-1 sm:gap-1.5 rounded-xl bg-white/15 text-white border border-white/20 px-3 py-1.5 text-xs font-bold hover:bg-white/25 active:scale-95 transition"
+            >
+              <CreditCard size={14} />
+              <span>Loan</span>
+            </button>
           </div>
         </div>
       </div>
 
       {/* 4 Metric Cards - 2 Columns on Mobile, 4 on Desktop */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
-        {/* Card 1: Monthly Income */}
+        {/* Card 1: Total Income */}
         <div className="rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-5 shadow-sm transition hover:border-blue-300">
           <div className="flex items-center justify-between text-slate-500">
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider truncate">Income</span>
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider truncate">Total Income</span>
             <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
               <ArrowDownLeft size={15} />
             </div>
           </div>
           <div className="mt-2 sm:mt-3 text-base sm:text-2xl font-extrabold text-blue-900 font-mono truncate">
-            +{formatCurrency(metrics.monthlyIncome, profile.currencySymbol)}
+            +{formatCurrency(metrics.totalIncome, profile.currencySymbol)}
           </div>
           <div className="mt-1.5 text-[10px] sm:text-[11px] text-slate-500 border-t border-slate-100 pt-1.5 hidden sm:block truncate">
-            This Month
+            Total Recorded
           </div>
         </div>
 
-        {/* Card 2: Monthly Expenses */}
+        {/* Card 2: Total Expenses */}
         <div className="rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-5 shadow-sm transition hover:border-blue-300">
           <div className="flex items-center justify-between text-slate-500">
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider truncate">Expenses</span>
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider truncate">Total Expenses</span>
             <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-900">
               <ArrowUpRight size={15} />
             </div>
           </div>
           <div className="mt-2 sm:mt-3 text-base sm:text-2xl font-extrabold text-slate-900 font-mono truncate">
-            -{formatCurrency(metrics.monthlyExpenses, profile.currencySymbol)}
+            -{formatCurrency(metrics.totalExpenses, profile.currencySymbol)}
           </div>
           <div className="mt-1.5 text-[10px] sm:text-[11px] text-slate-500 border-t border-slate-100 pt-1.5 hidden sm:block truncate">
-            This Month
+            Total Recorded
           </div>
         </div>
 
         {/* Card 3: Net Savings */}
         <div className="rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-5 shadow-sm transition hover:border-blue-300">
           <div className="flex items-center justify-between text-slate-500">
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider truncate">Savings</span>
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider truncate">Total Savings</span>
             <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
               <TrendingUp size={15} />
             </div>
@@ -178,10 +214,10 @@ export default function PersonalDashboardPage() {
             </div>
           </div>
           <div className="mt-2 sm:mt-3 text-xs sm:text-sm font-bold text-slate-900 flex justify-between items-center font-mono">
-            <span className="truncate">Lent: <strong className="text-blue-700">₹{metrics.totalLent}</strong></span>
+            <span className="truncate">Lent: <strong className="text-blue-700">{formatCurrency(metrics.totalLent, profile.currencySymbol)}</strong></span>
           </div>
           <div className="mt-0.5 sm:mt-1 text-xs sm:text-sm font-bold text-slate-900 flex justify-between items-center font-mono">
-            <span className="truncate">Owe: <strong className="text-slate-800">₹{metrics.totalBorrowed}</strong></span>
+            <span className="truncate">Owe: <strong className="text-slate-800">{formatCurrency(metrics.totalBorrowed, profile.currencySymbol)}</strong></span>
           </div>
           <div className="mt-1.5 text-[10px] sm:text-[11px] text-slate-500 border-t border-slate-100 pt-1.5 hidden sm:block">
             <Link href="/dues" className="text-blue-600 font-semibold hover:underline">
@@ -191,8 +227,8 @@ export default function PersonalDashboardPage() {
         </div>
       </div>
 
-      {/* Analytics Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+      {/* Analytics Charts Row - Hidden on mobile screens */}
+      <div className="hidden md:grid md:grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Income vs Expenses Bar Chart */}
         <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
@@ -434,6 +470,12 @@ export default function PersonalDashboardPage() {
           </table>
         </div>
       </div>
+
+      <QuickAddModal
+        isOpen={isQuickAddOpen}
+        onClose={() => setIsQuickAddOpen(false)}
+        defaultTab={quickAddTab}
+      />
     </div>
   );
 }

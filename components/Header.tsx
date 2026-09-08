@@ -6,7 +6,6 @@ import { useAuth } from '@/lib/auth-context';
 import { formatCurrency } from '@/lib/finance-math';
 import {
   Search,
-  Plus,
   Shield,
   User,
   LogOut,
@@ -18,7 +17,7 @@ import {
 import Link from 'next/link';
 
 interface HeaderProps {
-  onOpenQuickAdd: () => void;
+  onOpenQuickAdd: (tab?: 'EXPENSE' | 'INCOME' | 'DUE') => void;
   onOpenSearch: () => void;
 }
 
@@ -98,32 +97,8 @@ export default function Header({ onOpenQuickAdd, onOpenSearch }: HeaderProps) {
         )}
       </div>
 
-      {/* Right: Quick Actions & User Menu */}
+      {/* Right: User Menu */}
       <div className="flex items-center gap-2.5">
-        {/* Quick Month Metrics (User only) */}
-        {!isAdmin && (
-          <div className="hidden lg:flex items-center gap-3 text-xs border-r border-slate-200 pr-3 mr-1">
-            <div className="flex items-center gap-1 text-slate-600">
-              <span className="text-[10px] text-slate-400 uppercase font-bold">In:</span>
-              <span className="font-bold font-mono text-blue-700">+{formatCurrency(metrics.monthlyIncome, profile.currencySymbol)}</span>
-            </div>
-            <div className="flex items-center gap-1 text-slate-600">
-              <span className="text-[10px] text-slate-400 uppercase font-bold">Out:</span>
-              <span className="font-bold font-mono text-slate-900">-{formatCurrency(metrics.monthlyExpenses, profile.currencySymbol)}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Global + Add Button (User only) */}
-        {!isAdmin && (
-          <button
-            onClick={onOpenQuickAdd}
-            className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700 active:scale-95"
-          >
-            <Plus size={15} />
-            <span>Add Entry</span>
-          </button>
-        )}
 
         {/* User Account Menu Dropdown */}
         <div className="relative" ref={menuRef}>

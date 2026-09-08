@@ -2,9 +2,16 @@
 // FINANCIAL UTILITIES & FORMATTING
 // ==========================================
 
-export function formatCurrency(amount: number, symbol: string = '₹'): string {
-  const isNegative = amount < 0;
-  const absAmount = Math.abs(amount);
+export function formatCurrency(amount: any, symbol: string = '₹'): string {
+  if (amount === null || amount === undefined || amount === '') {
+    return `${symbol}0`;
+  }
+  const num = typeof amount === 'number' ? amount : parseFloat(String(amount).replace(/[^0-9.-]+/g, ''));
+  if (isNaN(num)) {
+    return `${symbol}0`;
+  }
+  const isNegative = num < 0;
+  const absAmount = Math.abs(num);
   
   const formatted = new Intl.NumberFormat('en-IN', {
     minimumFractionDigits: 0,
@@ -14,6 +21,8 @@ export function formatCurrency(amount: number, symbol: string = '₹'): string {
   return `${isNegative ? '-' : ''}${symbol}${formatted}`;
 }
 
-export function round2(num: number): number {
-  return Math.round((num + Number.EPSILON) * 100) / 100;
+export function round2(num: any): number {
+  const n = typeof num === 'number' ? num : parseFloat(String(num || 0).replace(/[^0-9.-]+/g, ''));
+  if (isNaN(n)) return 0;
+  return Math.round((n + Number.EPSILON) * 100) / 100;
 }

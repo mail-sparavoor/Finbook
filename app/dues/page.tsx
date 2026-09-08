@@ -73,11 +73,29 @@ export default function DuesPage() {
 
   // Metrics
   const totalLentActive = useMemo(() => {
-    return dues.filter((d: PersonalDue) => d.type === 'I_LENT' && d.status === 'ACTIVE').reduce((s: number, d: PersonalDue) => s + d.remainingAmount, 0);
+    return dues
+      .filter((d: PersonalDue) => d.type === 'I_LENT' && d.status === 'ACTIVE')
+      .reduce((s: number, d: PersonalDue) => {
+        const orig = Number(d.originalAmount) || 0;
+        const paid = Number(d.paidAmount) || 0;
+        const rem = d.remainingAmount !== undefined && d.remainingAmount !== null && !isNaN(Number(d.remainingAmount))
+          ? Number(d.remainingAmount)
+          : Math.max(0, orig - paid);
+        return s + rem;
+      }, 0);
   }, [dues]);
 
   const totalBorrowedActive = useMemo(() => {
-    return dues.filter((d: PersonalDue) => d.type === 'I_BORROWED' && d.status === 'ACTIVE').reduce((s: number, d: PersonalDue) => s + d.remainingAmount, 0);
+    return dues
+      .filter((d: PersonalDue) => d.type === 'I_BORROWED' && d.status === 'ACTIVE')
+      .reduce((s: number, d: PersonalDue) => {
+        const orig = Number(d.originalAmount) || 0;
+        const paid = Number(d.paidAmount) || 0;
+        const rem = d.remainingAmount !== undefined && d.remainingAmount !== null && !isNaN(Number(d.remainingAmount))
+          ? Number(d.remainingAmount)
+          : Math.max(0, orig - paid);
+        return s + rem;
+      }, 0);
   }, [dues]);
 
   // Aggregate Ledgers for all contacts
@@ -435,11 +453,11 @@ export default function DuesPage() {
                         <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] border-t border-slate-100 pt-2 text-slate-600">
                           <div>
                             <span className="text-slate-400">Total Lent:</span>{' '}
-                            <strong>₹{ledger.totalLent}</strong>
+                            <strong>{formatCurrency(ledger.totalLent, profile.currencySymbol)}</strong>
                           </div>
                           <div>
                             <span className="text-slate-400">Total Borrowed:</span>{' '}
-                            <strong>₹{ledger.totalBorrowed}</strong>
+                            <strong>{formatCurrency(ledger.totalBorrowed, profile.currencySymbol)}</strong>
                           </div>
                         </div>
                       </div>
@@ -551,14 +569,14 @@ export default function DuesPage() {
                           <td className="py-3.5 px-4 font-mono text-slate-500 whitespace-nowrap">{d.dueDate}</td>
 
                           <td className="py-3.5 px-4 text-right font-mono text-slate-500">
-                            ₹{d.originalAmount}
+                            {formatCurrency(d.originalAmount, profile.currencySymbol)}
                           </td>
 
                           <td
                             className={`py-3.5 px-4 text-right font-bold font-mono ${isLent ? 'text-blue-700' : 'text-slate-900'
                               }`}
                           >
-                            ₹{d.remainingAmount}
+                            {formatCurrency(d.remainingAmount, profile.currencySymbol)}
                           </td>
 
                           <td className="py-3.5 px-4 text-center">
@@ -742,17 +760,17 @@ export default function DuesPage() {
               <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
                 <div className="text-[10px] text-slate-400 font-bold uppercase">Total Lent</div>
                 <div className="text-base font-extrabold text-blue-900 font-mono mt-1">
-                  ₹{activeSelectedLedger.totalLent}
+                  {formatCurrency(activeSelectedLedger.totalLent, profile.currencySymbol)}
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">Repaid: ₹{activeSelectedLedger.totalSettledLent}</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Repaid: {formatCurrency(activeSelectedLedger.totalSettledLent, profile.currencySymbol)}</div>
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
                 <div className="text-[10px] text-slate-400 font-bold uppercase">Total Borrowed</div>
                 <div className="text-base font-extrabold text-slate-900 font-mono mt-1">
-                  ₹{activeSelectedLedger.totalBorrowed}
+                  {formatCurrency(activeSelectedLedger.totalBorrowed, profile.currencySymbol)}
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">Repaid: ₹{activeSelectedLedger.totalSettledBorrowed}</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Repaid: {formatCurrency(activeSelectedLedger.totalSettledBorrowed, profile.currencySymbol)}</div>
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
@@ -811,8 +829,8 @@ export default function DuesPage() {
                           </div>
                           <div className="font-semibold text-slate-800">{d.notes || 'Personal loan/due entry'}</div>
                           <div className="text-[11px] text-slate-500 font-mono">
-                            Original: ₹{d.originalAmount} | Paid: ₹{d.paidAmount} | Remaining:{' '}
-                            <strong className={isLent ? 'text-blue-700' : 'text-slate-900'}>₹{d.remainingAmount}</strong>
+                            Original: {formatCurrency(d.originalAmount, profile.currencySymbol)} | Paid: {formatCurrency(d.paidAmount, profile.currencySymbol)} | Remaining:{' '}
+                            <strong className={isLent ? 'text-blue-700' : 'text-slate-900'}>{formatCurrency(d.remainingAmount, profile.currencySymbol)}</strong>
                           </div>
                         </div>
 

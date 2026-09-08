@@ -99,6 +99,8 @@ interface PersonalContextType {
   // Metrics
   metrics: {
     totalNetWorth: number;
+    totalIncome: number;
+    totalExpenses: number;
     monthlyIncome: number;
     monthlyExpenses: number;
     netSavings: number;
@@ -147,7 +149,13 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
       fetch(`/api/transactions?userId=${encodeURIComponent(userId)}`, { signal: controller.signal })
         .then((res) => res.json())
         .then((json) => {
-          if (json.success && Array.isArray(json.data)) setTransactions(json.data);
+          if (json.success && Array.isArray(json.data)) {
+            const sanitized = json.data.map((t: any) => ({
+              ...t,
+              amount: Number(t.amount) || 0,
+            }));
+            setTransactions(sanitized);
+          }
         })
         .catch(() => {});
 
@@ -155,7 +163,23 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
       fetch(`/api/dues?userId=${encodeURIComponent(userId)}`, { signal: controller.signal })
         .then((res) => res.json())
         .then((json) => {
-          if (json.success && Array.isArray(json.data)) setDues(json.data);
+          if (json.success && Array.isArray(json.data)) {
+            const sanitized = json.data.map((d: any) => {
+              const orig = Number(d.originalAmount) || 0;
+              const paid = Number(d.paidAmount) || 0;
+              const remaining =
+                d.remainingAmount !== undefined && d.remainingAmount !== null && !isNaN(Number(d.remainingAmount))
+                  ? Number(d.remainingAmount)
+                  : Math.max(0, orig - paid);
+              return {
+                ...d,
+                originalAmount: orig,
+                paidAmount: paid,
+                remainingAmount: remaining,
+              };
+            });
+            setDues(sanitized);
+          }
         })
         .catch(() => {});
 
@@ -309,15 +333,31 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     const lentDues = personDues.filter((d) => d.type === 'I_LENT');
     const borrowedDues = personDues.filter((d) => d.type === 'I_BORROWED');
 
-    const totalLent = lentDues.reduce((s, d) => s + d.originalAmount, 0);
-    const totalSettledLent = lentDues.reduce((s, d) => s + d.paidAmount, 0);
-    const remainingLent = lentDues.filter((d) => d.status === 'ACTIVE').reduce((s, d) => s + d.remainingAmount, 0);
+    const totalLent = lentDues.reduce((s, d) => s + (Number(d.originalAmount) || 0), 0);
+    const totalSettledLent = lentDues.reduce((s, d) => s + (Number(d.paidAmount) || 0), 0);
+    const remainingLent = lentDues
+      .filter((d) => d.status === 'ACTIVE')
+      .reduce((s, d) => {
+        const orig = Number(d.originalAmount) || 0;
+        const paid = Number(d.paidAmount) || 0;
+        const rem = d.remainingAmount !== undefined && d.remainingAmount !== null && !isNaN(Number(d.remainingAmount))
+          ? Number(d.remainingAmount)
+          : Math.max(0, orig - paid);
+        return s + rem;
+      }, 0);
 
-    const totalBorrowed = borrowedDues.reduce((s, d) => s + d.originalAmount, 0);
-    const totalSettledBorrowed = borrowedDues.reduce((s, d) => s + d.paidAmount, 0);
+    const totalBorrowed = borrowedDues.reduce((s, d) => s + (Number(d.originalAmount) || 0), 0);
+    const totalSettledBorrowed = borrowedDues.reduce((s, d) => s + (Number(d.paidAmount) || 0), 0);
     const remainingBorrowed = borrowedDues
       .filter((d) => d.status === 'ACTIVE')
-      .reduce((s, d) => s + d.remainingAmount, 0);
+      .reduce((s, d) => {
+        const orig = Number(d.originalAmount) || 0;
+        const paid = Number(d.paidAmount) || 0;
+        const rem = d.remainingAmount !== undefined && d.remainingAmount !== null && !isNaN(Number(d.remainingAmount))
+          ? Number(d.remainingAmount)
+          : Math.max(0, orig - paid);
+        return s + rem;
+      }, 0);
 
     const netBalance = round2(remainingLent - remainingBorrowed);
     const status = netBalance > 0 ? 'RECEIVABLE' : netBalance < 0 ? 'PAYABLE' : 'SETTLED';
@@ -328,10 +368,10 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
       phone,
       dues: personDues,
       transactions: personTransactions,
-      totalLent,
-      totalBorrowed,
-      totalSettledLent,
-      totalSettledBorrowed,
+      totalLent: round2(totalLent),
+      totalBorrowed: round2(totalBorrowed),
+      totalSettledLent: round2(totalSettledLent),
+      totalSettledBorrowed: round2(totalSettledBorrowed),
       netBalance,
       status,
     };
@@ -610,21 +650,39 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
       .reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
     const totalNetWorth = round2(allIncome - allExpenses);
+    const totalSavings = totalNetWorth;
+    const totalSavingsRate = allIncome > 0 ? Math.round(((allIncome - allExpenses) / allIncome) * 100) : 0;
 
     const totalLent = dues
       .filter((d) => d.type === 'I_LENT' && d.status === 'ACTIVE')
-      .reduce((sum, d) => sum + Number(d.remainingAmount || 0), 0);
+      .reduce((sum, d) => {
+        const orig = Number(d.originalAmount) || 0;
+        const paid = Number(d.paidAmount) || 0;
+        const rem = d.remainingAmount !== undefined && d.remainingAmount !== null && !isNaN(Number(d.remainingAmount))
+          ? Number(d.remainingAmount)
+          : Math.max(0, orig - paid);
+        return sum + rem;
+      }, 0);
 
     const totalBorrowed = dues
       .filter((d) => d.type === 'I_BORROWED' && d.status === 'ACTIVE')
-      .reduce((sum, d) => sum + Number(d.remainingAmount || 0), 0);
+      .reduce((sum, d) => {
+        const orig = Number(d.originalAmount) || 0;
+        const paid = Number(d.paidAmount) || 0;
+        const rem = d.remainingAmount !== undefined && d.remainingAmount !== null && !isNaN(Number(d.remainingAmount))
+          ? Number(d.remainingAmount)
+          : Math.max(0, orig - paid);
+        return sum + rem;
+      }, 0);
 
     return {
       totalNetWorth,
+      totalIncome: round2(allIncome),
+      totalExpenses: round2(allExpenses),
       monthlyIncome: round2(monthlyIncome),
       monthlyExpenses: round2(monthlyExpenses),
-      netSavings,
-      savingsRate,
+      netSavings: totalSavings,
+      savingsRate: totalSavingsRate,
       totalLent: round2(totalLent),
       totalBorrowed: round2(totalBorrowed),
     };

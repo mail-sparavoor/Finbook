@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { pool } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+
 // GET: Fetch dues for a user
 export async function GET(request: Request) {
   try {
@@ -15,10 +17,9 @@ export async function GET(request: Request) {
         person_name as personName, 
         phone, 
         type, 
-        CAST(original_amount AS DECIMAL(10,2)) as originalAmount, 
-        CAST(paid_amount AS DECIMAL(10,2)) as paidAmount, 
-        CAST(remaining_amount AS DECIMAL(10,2)) as remainingAmount, 
-        DATE_FORMAT(due_date, '%Y-%m-%d') as dueDate, 
+        original_amount as originalAmount, 
+        paid_amount as paidAmount, 
+        due_date as dueDate, 
         status, 
         notes, 
         created_at as createdAt 
@@ -28,7 +29,28 @@ export async function GET(request: Request) {
       [userId]
     );
 
-    return NextResponse.json({ success: true, data: rows });
+    const formattedRows = rows.map((r: any) => {
+      const orig = Number(r.originalAmount) || 0;
+      const paid = Number(r.paidAmount) || 0;
+      const rem = Math.max(0, orig - paid);
+      return {
+        id: r.id,
+        userId: r.userId,
+        personId: r.personId,
+        personName: r.personName,
+        phone: r.phone,
+        type: r.type,
+        originalAmount: orig,
+        paidAmount: paid,
+        remainingAmount: rem,
+        dueDate: r.dueDate ? String(r.dueDate).slice(0, 10) : new Date().toISOString().split('T')[0],
+        status: rem === 0 ? 'SETTLED' : (r.status || 'ACTIVE'),
+        notes: r.notes || '',
+        createdAt: r.createdAt || new Date().toISOString(),
+      };
+    });
+
+    return NextResponse.json({ success: true, data: formattedRows });
   } catch (error: any) {
     console.error('Error fetching dues:', error);
     return NextResponse.json(

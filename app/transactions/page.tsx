@@ -10,9 +10,14 @@ import {
   Plus,
   ArrowDownLeft,
   ArrowUpRight,
+  CreditCard,
   Trash2,
   Download,
   Edit2,
+  Calendar,
+  RotateCcw,
+  Filter,
+  X,
 } from 'lucide-react';
 import QuickAddModal from '@/components/modals/QuickAddModal';
 import EditTransactionModal from '@/components/modals/EditTransactionModal';
@@ -28,15 +33,85 @@ export default function TransactionsPage() {
   } = usePersonalFinance();
 
   const [activeTab, setActiveTab] = useState<'ALL' | 'INCOME' | 'EXPENSE'>('ALL');
+  
+  // Date & Period Filter States
+  const [dateFilterMode, setDateFilterMode] = useState<
+    'ALL' | 'TODAY' | 'YESTERDAY' | 'THIS_MONTH' | 'LAST_MONTH' | 'MONTH' | 'DATE' | 'CUSTOM_RANGE'
+  >('ALL');
+  const [selectedMonth, setSelectedMonth] = useState<string>('ALL');
+  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
+
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedPaymentMode, setSelectedPaymentMode] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [quickAddTab, setQuickAddTab] = useState<'EXPENSE' | 'INCOME' | 'DUE'>('EXPENSE');
   const [editingTransaction, setEditingTransaction] = useState<PersonalTransaction | null>(null);
+
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const yesterdayStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  }, []);
+  const thisMonthStr = useMemo(() => new Date().toISOString().slice(0, 7), []);
+  const lastMonthStr = useMemo(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().slice(0, 7);
+  }, []);
 
   const allCategories = useMemo(() => {
     return Array.from(new Set([...incomeCategories, ...expenseCategories]));
   }, [incomeCategories, expenseCategories]);
+
+  // Derive unique recorded months from user transactions
+  const availableMonths = useMemo(() => {
+    const monthsMap = new Map<string, string>();
+    transactions.forEach((t: PersonalTransaction) => {
+      if (t.date && t.date.length >= 7) {
+        const monthKey = t.date.slice(0, 7); // YYYY-MM
+        if (!monthsMap.has(monthKey)) {
+          const [yearStr, monthStr] = monthKey.split('-');
+          const dateObj = new Date(parseInt(yearStr, 10), parseInt(monthStr, 10) - 1, 1);
+          const label = !isNaN(dateObj.getTime())
+            ? dateObj.toLocaleString('default', { month: 'long', year: 'numeric' })
+            : monthKey;
+          monthsMap.set(monthKey, label);
+        }
+      }
+    });
+
+    const sortedKeys = Array.from(monthsMap.keys()).sort().reverse();
+    return sortedKeys.map((key) => ({
+      key,
+      label: monthsMap.get(key)!,
+    }));
+  }, [transactions]);
+
+  const hasActiveFilters = useMemo(() => {
+    return (
+      activeTab !== 'ALL' ||
+      dateFilterMode !== 'ALL' ||
+      selectedCategory !== 'ALL' ||
+      selectedPaymentMode !== 'ALL' ||
+      searchQuery.trim() !== ''
+    );
+  }, [activeTab, dateFilterMode, selectedCategory, selectedPaymentMode, searchQuery]);
+
+  const handleResetFilters = () => {
+    setActiveTab('ALL');
+    setDateFilterMode('ALL');
+    setSelectedMonth('ALL');
+    setSelectedDate('');
+    setCustomStartDate('');
+    setCustomEndDate('');
+    setSelectedCategory('ALL');
+    setSelectedPaymentMode('ALL');
+    setSearchQuery('');
+  };
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t: PersonalTransaction) => {
@@ -44,25 +119,64 @@ export default function TransactionsPage() {
       if (selectedCategory !== 'ALL' && t.category !== selectedCategory) return false;
       if (selectedPaymentMode !== 'ALL' && (t.paymentMode || 'Online / UPI') !== selectedPaymentMode) return false;
 
+      // Date / Period filters
+      if (t.date) {
+        if (dateFilterMode === 'TODAY' && t.date !== todayStr) return false;
+        if (dateFilterMode === 'YESTERDAY' && t.date !== yesterdayStr) return false;
+        if (dateFilterMode === 'THIS_MONTH' && !t.date.startsWith(thisMonthStr)) return false;
+        if (dateFilterMode === 'LAST_MONTH' && !t.date.startsWith(lastMonthStr)) return false;
+        if (dateFilterMode === 'MONTH' && selectedMonth !== 'ALL' && !t.date.startsWith(selectedMonth)) return false;
+        if (dateFilterMode === 'DATE' && selectedDate && t.date !== selectedDate) return false;
+        if (dateFilterMode === 'CUSTOM_RANGE') {
+          if (customStartDate && t.date < customStartDate) return false;
+          if (customEndDate && t.date > customEndDate) return false;
+        }
+      }
+
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         return (
           t.category.toLowerCase().includes(q) ||
           (t.paymentMode && t.paymentMode.toLowerCase().includes(q)) ||
-          (t.notes && t.notes.toLowerCase().includes(q))
+          (t.notes && t.notes.toLowerCase().includes(q)) ||
+          (t.personName && t.personName.toLowerCase().includes(q)) ||
+          (t.date && t.date.includes(q))
         );
       }
       return true;
     });
-  }, [transactions, activeTab, selectedCategory, selectedPaymentMode, searchQuery]);
+  }, [
+    transactions,
+    activeTab,
+    selectedCategory,
+    selectedPaymentMode,
+    dateFilterMode,
+    selectedMonth,
+    selectedDate,
+    customStartDate,
+    customEndDate,
+    searchQuery,
+    todayStr,
+    yesterdayStr,
+    thisMonthStr,
+    lastMonthStr,
+  ]);
+
+  const filteredIncome = useMemo(() => {
+    return filteredTransactions
+      .filter((t: PersonalTransaction) => t.type === 'INCOME')
+      .reduce((sum: number, t: PersonalTransaction) => sum + t.amount, 0);
+  }, [filteredTransactions]);
+
+  const filteredExpense = useMemo(() => {
+    return filteredTransactions
+      .filter((t: PersonalTransaction) => t.type === 'EXPENSE')
+      .reduce((sum: number, t: PersonalTransaction) => sum + t.amount, 0);
+  }, [filteredTransactions]);
 
   const totalFilteredAmount = useMemo(() => {
-    return filteredTransactions.reduce((sum: number, t: PersonalTransaction) => {
-      if (t.type === 'INCOME') return sum + t.amount;
-      if (t.type === 'EXPENSE') return sum - t.amount;
-      return sum;
-    }, 0);
-  }, [filteredTransactions]);
+    return filteredIncome - filteredExpense;
+  }, [filteredIncome, filteredExpense]);
 
   const handleExportCSV = () => {
     const headers = ['Date', 'Type', 'Category', 'Payment Mode', 'Amount', 'Notes'];
@@ -80,11 +194,18 @@ export default function TransactionsPage() {
       ...rows.map((r: any[]) => r.map((cell: any) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
     ].join('\n');
 
+    let suffix = 'All';
+    if (dateFilterMode === 'TODAY') suffix = `Today_${todayStr}`;
+    else if (dateFilterMode === 'MONTH') suffix = `Month_${selectedMonth}`;
+    else if (dateFilterMode === 'DATE') suffix = `Date_${selectedDate}`;
+    else if (dateFilterMode === 'CUSTOM_RANGE') suffix = `Range_${customStartDate || 'start'}_to_${customEndDate || 'end'}`;
+    else if (dateFilterMode === 'THIS_MONTH') suffix = `Month_${thisMonthStr}`;
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Personal_Transactions_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `Personal_Transactions_${suffix}.csv`;
     link.click();
     link.remove();
   };
@@ -95,72 +216,252 @@ export default function TransactionsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900">Personal Transactions</h1>
-          <p className="text-xs text-slate-500">Record, edit, and review your daily income and expense entries</p>
+          <p className="text-xs text-slate-500">Record, edit, and filter your entries by date, month, and categories</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           <button
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
           >
             <Download size={14} />
-            <span>Export CSV</span>
+            <span className="hidden sm:inline">Export CSV</span>
           </button>
+
           <button
-            onClick={() => setIsAddOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 transition active:scale-95"
+            onClick={() => {
+              setQuickAddTab('INCOME');
+              setIsAddOpen(true);
+            }}
+            className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-1.5 sm:py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 transition active:scale-95"
+            title="Add Cash In (Income)"
           >
-            <Plus size={14} />
-            <span>Add Entry</span>
+            <ArrowDownLeft size={14} className="stroke-[2.5]" />
+            <span>Cash In</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setQuickAddTab('EXPENSE');
+              setIsAddOpen(true);
+            }}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 sm:py-2 text-xs font-bold text-slate-800 shadow-sm hover:bg-slate-50 transition active:scale-95"
+            title="Add Cash Out (Expense)"
+          >
+            <ArrowUpRight size={14} className="stroke-[2.5] text-slate-700" />
+            <span>Cash Out</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setQuickAddTab('DUE');
+              setIsAddOpen(true);
+            }}
+            className="flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 sm:py-2 text-xs font-bold text-blue-900 hover:bg-blue-100 transition active:scale-95"
+            title="Record Loan / Due"
+          >
+            <CreditCard size={14} className="text-blue-700" />
+            <span>Loan</span>
           </button>
         </div>
       </div>
 
       {/* Tabs & Filters */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
-        {/* Type Tabs */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3.5">
+        {/* Type Tabs & Metrics Summary */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
             <button
               onClick={() => setActiveTab('ALL')}
               className={`rounded-md px-3 py-1 text-xs font-semibold transition ${
-                activeTab === 'ALL' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600'
+                activeTab === 'ALL' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              All Transactions ({transactions.length})
+              All Types ({transactions.length})
             </button>
             <button
               onClick={() => setActiveTab('EXPENSE')}
               className={`rounded-md px-3 py-1 text-xs font-semibold transition ${
-                activeTab === 'EXPENSE' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600'
+                activeTab === 'EXPENSE' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Expenses (Money Out)
+              Expenses
             </button>
             <button
               onClick={() => setActiveTab('INCOME')}
               className={`rounded-md px-3 py-1 text-xs font-semibold transition ${
-                activeTab === 'INCOME' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600'
+                activeTab === 'INCOME' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Income (Money In)
+              Income
             </button>
           </div>
 
-          <div className="text-xs font-bold text-slate-700 font-mono">
-            Net Total: <span className={totalFilteredAmount >= 0 ? 'text-blue-700' : 'text-slate-900'}>
-              {formatCurrency(totalFilteredAmount, profile.currencySymbol)}
-            </span>
+          <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
+            <div className="text-blue-700 font-bold">
+              +{formatCurrency(filteredIncome, profile.currencySymbol)}
+            </div>
+            <div className="text-slate-800 font-bold">
+              -{formatCurrency(filteredExpense, profile.currencySymbol)}
+            </div>
+            <div className="border-l border-slate-200 pl-3 font-bold text-slate-700">
+              Net: <span className={totalFilteredAmount >= 0 ? 'text-blue-700' : 'text-slate-900'}>
+                {formatCurrency(totalFilteredAmount, profile.currencySymbol)}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Filter Dropdowns & Search */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-100">
+        {/* Date & Period Preset Selector */}
+        <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-bold text-slate-500 mr-1 flex items-center gap-1">
+            <Calendar size={13} className="text-blue-600" /> Period:
+          </span>
+
+          <button
+            type="button"
+            onClick={() => setDateFilterMode('ALL')}
+            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+              dateFilterMode === 'ALL' ? 'bg-blue-100 text-blue-900 font-bold' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            All Dates
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDateFilterMode('TODAY')}
+            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+              dateFilterMode === 'TODAY' ? 'bg-blue-100 text-blue-900 font-bold' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            Today
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDateFilterMode('YESTERDAY')}
+            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+              dateFilterMode === 'YESTERDAY' ? 'bg-blue-100 text-blue-900 font-bold' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            Yesterday
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDateFilterMode('THIS_MONTH')}
+            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+              dateFilterMode === 'THIS_MONTH' ? 'bg-blue-100 text-blue-900 font-bold' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            This Month
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setDateFilterMode('MONTH');
+              if (selectedMonth === 'ALL' && availableMonths.length > 0) {
+                setSelectedMonth(availableMonths[0].key);
+              }
+            }}
+            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+              dateFilterMode === 'MONTH' ? 'bg-blue-100 text-blue-900 font-bold' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            Specific Month
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setDateFilterMode('DATE');
+              if (!selectedDate) setSelectedDate(todayStr);
+            }}
+            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+              dateFilterMode === 'DATE' ? 'bg-blue-100 text-blue-900 font-bold' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            Specific Date
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setDateFilterMode('CUSTOM_RANGE');
+              if (!customStartDate) setCustomStartDate(thisMonthStr + '-01');
+              if (!customEndDate) setCustomEndDate(todayStr);
+            }}
+            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+              dateFilterMode === 'CUSTOM_RANGE' ? 'bg-blue-100 text-blue-900 font-bold' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            Date Range
+          </button>
+        </div>
+
+        {/* Dynamic Secondary Date Inputs */}
+        {dateFilterMode === 'MONTH' && (
+          <div className="flex items-center gap-2 p-2.5 rounded-xl bg-blue-50/60 border border-blue-100">
+            <span className="text-xs font-bold text-blue-900">Select Month:</span>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs text-slate-800 font-semibold focus:border-blue-600 focus:outline-none"
+            >
+              <option value="ALL">All Recorded Months</option>
+              {availableMonths.map((m) => (
+                <option key={m.key} value={m.key}>
+                  {m.label} ({m.key})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {dateFilterMode === 'DATE' && (
+          <div className="flex items-center gap-2 p-2.5 rounded-xl bg-blue-50/60 border border-blue-100">
+            <span className="text-xs font-bold text-blue-900">Select Date:</span>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs text-slate-800 font-semibold focus:border-blue-600 focus:outline-none"
+            />
+          </div>
+        )}
+
+        {dateFilterMode === 'CUSTOM_RANGE' && (
+          <div className="flex flex-wrap items-center gap-3 p-2.5 rounded-xl bg-blue-50/60 border border-blue-100">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-blue-900">From:</span>
+              <input
+                type="date"
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                className="rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs text-slate-800 font-semibold focus:border-blue-600 focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-blue-900">To:</span>
+              <input
+                type="date"
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                className="rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs text-slate-800 font-semibold focus:border-blue-600 focus:outline-none"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Filter Dropdowns, Search & Reset */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-100 items-center">
           <div className="relative">
             <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
             <input
               type="text"
-              placeholder="Search category, notes, mode..."
+              placeholder="Search category, notes, mode, person..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-8 pr-3 py-1.5 text-xs focus:border-blue-600 focus:bg-white focus:outline-none"
@@ -188,6 +489,17 @@ export default function TransactionsPage() {
               <option key={m} value={m}>{m}</option>
             ))}
           </select>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="flex items-center justify-center gap-1 rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200 transition"
+            >
+              <RotateCcw size={12} />
+              <span>Reset Filters</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -327,6 +639,7 @@ export default function TransactionsPage() {
       <QuickAddModal
         isOpen={isAddOpen}
         onClose={() => setIsAddOpen(false)}
+        defaultTab={quickAddTab}
       />
 
       <EditTransactionModal

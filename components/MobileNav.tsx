@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 interface MobileNavProps {
-  onOpenQuickAdd: () => void;
+  onOpenQuickAdd: (tab?: 'EXPENSE' | 'INCOME' | 'DUE') => void;
 }
 
 export default function MobileNav({ onOpenQuickAdd }: MobileNavProps) {
@@ -102,7 +102,7 @@ export default function MobileNav({ onOpenQuickAdd }: MobileNavProps) {
       {/* 3. Center Floating Quick Add Action */}
       <div className="flex flex-1 justify-center -translate-y-3.5">
         <button
-          onClick={onOpenQuickAdd}
+          onClick={() => onOpenQuickAdd('EXPENSE')}
           aria-label="Add Transaction or Due"
           className="flex h-13 w-13 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-xl shadow-blue-600/35 active:scale-90 active:bg-blue-700 transition"
         >

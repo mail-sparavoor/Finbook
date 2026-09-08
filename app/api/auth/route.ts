@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { pool } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+
 // GET: Fetch all users (for admin) or single user
 export async function GET(request: Request) {
   try {
