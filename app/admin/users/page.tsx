@@ -501,8 +501,8 @@ export default function AdminUsersPage() {
       {/* MODAL 1: CREATE NEW USER */}
       {/* ========================================================================= */}
       {isCreateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in select-none">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 select-text">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
@@ -635,8 +635,8 @@ export default function AdminUsersPage() {
       {/* MODAL 2: EDIT USER */}
       {/* ========================================================================= */}
       {isEditOpen && selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in select-none">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 select-text">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="text-base font-bold text-slate-900">Edit User Details</h3>
               <button
@@ -738,8 +738,8 @@ export default function AdminUsersPage() {
       {/* MODAL 3: RESET PASSWORD */}
       {/* ========================================================================= */}
       {isPasswordResetOpen && selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in select-none">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 select-text">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="text-base font-bold text-slate-900">Reset User Password</h3>
               <button

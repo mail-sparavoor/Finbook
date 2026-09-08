@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { usePersonalFinance } from '@/lib/personal-context';
 import { PersonalBook } from '@/lib/types';
 import { X, BookOpen, Check, Trash2, AlertCircle } from 'lucide-react';
@@ -48,6 +49,11 @@ export default function BookModal({ isOpen, onClose, editingBook }: BookModalPro
   const [isDefault, setIsDefault] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (editingBook) {
@@ -68,7 +74,7 @@ export default function BookModal({ isOpen, onClose, editingBook }: BookModalPro
     setErrorMsg(null);
   }, [editingBook, isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
   const handleCurrencyChange = (currCode: string) => {
     const match = COMMON_CURRENCIES.find((c) => c.code === currCode);
@@ -145,9 +151,9 @@ export default function BookModal({ isOpen, onClose, editingBook }: BookModalPro
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in select-none">
-      <div className="relative w-full max-w-md rounded-t-3xl sm:rounded-2xl bg-white p-5 sm:p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in select-none">
+      <div className="relative w-full max-w-md rounded-t-3xl sm:rounded-2xl bg-white p-5 sm:p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] select-text">
         {/* Mobile Drag Handle */}
         <div className="sm:hidden mx-auto -mt-1 mb-3.5 h-1.5 w-12 rounded-full bg-slate-200" />
 
@@ -315,6 +321,7 @@ export default function BookModal({ isOpen, onClose, editingBook }: BookModalPro
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

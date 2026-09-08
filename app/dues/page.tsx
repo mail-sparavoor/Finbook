@@ -632,8 +632,8 @@ export default function DuesPage() {
       {/* MODAL 1: FULL PERSON PROFILE & DEDICATED LEDGER MODAL */}
       {/* ========================================================================= */}
       {selectedPersonId && activeSelectedLedger && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
-          <div className="relative w-full max-w-2xl max-h-[90vh] rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl overflow-y-auto space-y-6">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in select-none">
+          <div className="relative w-full max-w-2xl max-h-[90vh] rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl overflow-y-auto space-y-6 select-text">
             {/* Header */}
             <div className="flex items-start justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-3.5">
@@ -937,8 +937,8 @@ export default function DuesPage() {
       {/* MODAL 2: ADD PERSON PROFILE */}
       {/* ========================================================================= */}
       {isAddPersonOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in select-none">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 select-text">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="text-base font-bold text-slate-900">Create New Person Profile</h3>
               <button
@@ -1009,8 +1009,8 @@ export default function DuesPage() {
       {/* MODAL 3: RECORD LOAN / DUE ENTRY */}
       {/* ========================================================================= */}
       {isAddDueOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in select-none">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 select-text">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="text-base font-bold text-slate-900">Record Loan / Due Entry</h3>
               <button
@@ -1109,8 +1109,8 @@ export default function DuesPage() {
       {/* MODAL 4: SETTLE / REPAYMENT MODAL */}
       {/* ========================================================================= */}
       {isSettleOpen && selectedDue && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in select-none">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 select-text">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="text-base font-bold text-slate-900">Record Settlement / Repayment</h3>
               <button

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { usePersonalFinance } from '@/lib/personal-context';
 import { formatCurrency } from '@/lib/finance-math';
 import { PersonalTransaction, PersonalDue } from '@/lib/types';
@@ -21,6 +22,11 @@ interface GlobalSearchModalProps {
 export default function GlobalSearchModal({ isOpen, onClose }: GlobalSearchModalProps) {
   const { profile, transactions, dues } = usePersonalFinance();
   const [query, setQuery] = useState('');
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Shortcut listener
   useEffect(() => {
@@ -61,10 +67,10 @@ export default function GlobalSearchModal({ isOpen, onClose }: GlobalSearchModal
     };
   }, [query, transactions, dues]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-16 sm:pt-24 p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in select-none">
       <div className="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden animate-in zoom-in-95">
         {/* Search Bar */}
         <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5">
@@ -173,6 +179,7 @@ export default function GlobalSearchModal({ isOpen, onClose }: GlobalSearchModal
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

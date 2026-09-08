@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { usePersonalFinance } from '@/lib/personal-context';
 import { X, CheckCircle2 } from 'lucide-react';
 import { PersonContact } from '@/lib/types';
@@ -18,6 +19,11 @@ export default function EditContactModal({ isOpen, onClose, contact }: EditConta
   const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (contact) {
@@ -27,7 +33,7 @@ export default function EditContactModal({ isOpen, onClose, contact }: EditConta
     }
   }, [contact]);
 
-  if (!isOpen || !contact) return null;
+  if (!isOpen || !contact || !mounted) return null;
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,9 +52,9 @@ export default function EditContactModal({ isOpen, onClose, contact }: EditConta
     }, 800);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
-      <div className="relative w-full max-w-md rounded-t-3xl sm:rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in select-none">
+      <div className="relative w-full max-w-md rounded-t-3xl sm:rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] select-text">
         {/* Mobile Drag Indicator */}
         <div className="sm:hidden mx-auto -mt-1 mb-3.5 h-1.5 w-12 rounded-full bg-slate-200" />
 
@@ -122,6 +128,7 @@ export default function EditContactModal({ isOpen, onClose, contact }: EditConta
           </form>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
