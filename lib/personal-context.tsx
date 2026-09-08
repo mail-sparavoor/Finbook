@@ -152,6 +152,55 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
   const [paymentModes, setPaymentModes] = useState<string[]>(DEFAULT_PAYMENT_MODES);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // 1. Instant hydration from localStorage on user change
+  useEffect(() => {
+    if (!userId || typeof window === 'undefined') return;
+    try {
+      const cached = localStorage.getItem(`finbook_cache_v2_${userId}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed) {
+          if (Array.isArray(parsed.books) && parsed.books.length > 0) setBooks(parsed.books);
+          if (Array.isArray(parsed.transactions)) setRawTransactions(parsed.transactions);
+          if (Array.isArray(parsed.dues)) setRawDues(parsed.dues);
+          if (Array.isArray(parsed.budgets)) setRawBudgets(parsed.budgets);
+          if (Array.isArray(parsed.contacts)) setRawContacts(parsed.contacts);
+        }
+      }
+
+      const savedBookId = localStorage.getItem(`finbook_active_book_${userId}`);
+      if (savedBookId) {
+        setActiveBookId(savedBookId);
+      }
+    } catch {}
+  }, [userId]);
+
+  // Helper to persist updated state to cache
+  const persistCache = useCallback(
+    (data: {
+      books?: PersonalBook[];
+      transactions?: PersonalTransaction[];
+      dues?: PersonalDue[];
+      budgets?: PersonalBudget[];
+      contacts?: PersonContact[];
+    }) => {
+      if (!userId || typeof window === 'undefined') return;
+      try {
+        const current = localStorage.getItem(`finbook_cache_v2_${userId}`);
+        const parsed = current ? JSON.parse(current) : {};
+        const merged = {
+          books: data.books ?? parsed.books ?? books,
+          transactions: data.transactions ?? parsed.transactions ?? rawTransactions,
+          dues: data.dues ?? parsed.dues ?? rawDues,
+          budgets: data.budgets ?? parsed.budgets ?? rawBudgets,
+          contacts: data.contacts ?? parsed.contacts ?? rawContacts,
+        };
+        localStorage.setItem(`finbook_cache_v2_${userId}`, JSON.stringify(merged));
+      } catch {}
+    },
+    [userId, books, rawTransactions, rawDues, rawBudgets, rawContacts]
+  );
+
   // Active Book Object
   const currentBook = useMemo(() => {
     if (!books || books.length === 0) return null;
@@ -209,87 +258,52 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     }
   }, [userId]);
 
-  // Fetch all user data from MySQL API endpoints
+  // Fetch all user data in a single fast parallel request
   const refreshData = useCallback(async () => {
     if (!currentUser || !userId) return;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-      // 1. Fetch Books
-      try {
-        const bookRes = await fetch(`/api/books?userId=${encodeURIComponent(userId)}`, { signal: controller.signal });
-        const bookJson = await bookRes.json();
-        if (bookJson.success && Array.isArray(bookJson.data) && bookJson.data.length > 0) {
-          setBooks(bookJson.data);
+      const res = await fetch(`/api/user-data?userId=${encodeURIComponent(userId)}`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
 
-          // Restore saved active book
+      const json = await res.json();
+      if (json.success && json.data) {
+        const { books: serverBooks, transactions: serverTx, dues: serverDues, budgets: serverBudgets, contacts: serverContacts } = json.data;
+
+        if (Array.isArray(serverBooks) && serverBooks.length > 0) {
+          setBooks(serverBooks);
           const savedBookId = typeof window !== 'undefined' ? localStorage.getItem(`finbook_active_book_${userId}`) : null;
-          if (savedBookId && bookJson.data.some((b: PersonalBook) => b.id === savedBookId)) {
+          if (savedBookId && serverBooks.some((b: PersonalBook) => b.id === savedBookId)) {
             setActiveBookId(savedBookId);
           } else {
-            const defBook = bookJson.data.find((b: PersonalBook) => b.isDefault) || bookJson.data[0];
+            const defBook = serverBooks.find((b: PersonalBook) => b.isDefault) || serverBooks[0];
             setActiveBookId(defBook.id);
           }
         }
-      } catch (err) {
-        console.warn('Failed to fetch books', err);
+
+        if (Array.isArray(serverTx)) setRawTransactions(serverTx);
+        if (Array.isArray(serverDues)) setRawDues(serverDues);
+        if (Array.isArray(serverBudgets)) setRawBudgets(serverBudgets);
+        if (Array.isArray(serverContacts)) setRawContacts(serverContacts);
+
+        // Update local cache
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(
+            `finbook_cache_v2_${userId}`,
+            JSON.stringify({
+              books: serverBooks,
+              transactions: serverTx,
+              dues: serverDues,
+              budgets: serverBudgets,
+              contacts: serverContacts,
+            })
+          );
+        }
       }
-
-      // 2. Fetch transactions
-      fetch(`/api/transactions?userId=${encodeURIComponent(userId)}`, { signal: controller.signal })
-        .then((res) => res.json())
-        .then((json) => {
-          if (json.success && Array.isArray(json.data)) {
-            const sanitized = json.data.map((t: any) => ({
-              ...t,
-              amount: Number(t.amount) || 0,
-            }));
-            setRawTransactions(sanitized);
-          }
-        })
-        .catch(() => {});
-
-      // 3. Fetch dues
-      fetch(`/api/dues?userId=${encodeURIComponent(userId)}`, { signal: controller.signal })
-        .then((res) => res.json())
-        .then((json) => {
-          if (json.success && Array.isArray(json.data)) {
-            const sanitized = json.data.map((d: any) => {
-              const orig = Number(d.originalAmount) || 0;
-              const paid = Number(d.paidAmount) || 0;
-              const remaining =
-                d.remainingAmount !== undefined && d.remainingAmount !== null && !isNaN(Number(d.remainingAmount))
-                  ? Number(d.remainingAmount)
-                  : Math.max(0, orig - paid);
-              return {
-                ...d,
-                originalAmount: orig,
-                paidAmount: paid,
-                remainingAmount: remaining,
-              };
-            });
-            setRawDues(sanitized);
-          }
-        })
-        .catch(() => {});
-
-      // 4. Fetch budgets
-      fetch(`/api/budgets?userId=${encodeURIComponent(userId)}`, { signal: controller.signal })
-        .then((res) => res.json())
-        .then((json) => {
-          if (json.success && Array.isArray(json.data) && json.data.length > 0) setRawBudgets(json.data);
-        })
-        .catch(() => {});
-
-      // 5. Fetch contacts
-      fetch(`/api/contacts?userId=${encodeURIComponent(userId)}`, { signal: controller.signal })
-        .then((res) => res.json())
-        .then((json) => {
-          if (json.success && Array.isArray(json.data)) setRawContacts(json.data);
-        })
-        .catch(() => {})
-        .finally(() => clearTimeout(timeoutId));
     } catch (error) {
       console.warn('API data fetch failed, using cached state', error);
     }
@@ -331,7 +345,11 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
       const json = await res.json();
       if (json.success && json.data) {
         const newB: PersonalBook = json.data;
-        setBooks((prev) => [newB, ...prev]);
+        setBooks((prev) => {
+          const updated = [newB, ...prev];
+          persistCache({ books: updated });
+          return updated;
+        });
         switchBook(newB.id);
         return newB;
       }
@@ -346,7 +364,11 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
   const updateBook = async (id: string, data: Partial<PersonalBook>): Promise<boolean> => {
     if (!userId) return false;
     try {
-      setBooks((prev) => prev.map((b) => (b.id === id ? { ...b, ...data } : b)));
+      setBooks((prev) => {
+        const updated = prev.map((b) => (b.id === id ? { ...b, ...data } : b));
+        persistCache({ books: updated });
+        return updated;
+      });
       const res = await fetch('/api/books', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -372,15 +394,28 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
       });
       const json = await res.json();
       if (json.success) {
-        setBooks((prev) => prev.filter((b) => b.id !== id));
-        setRawTransactions((prev) => prev.filter((t) => t.bookId !== id));
-        setRawDues((prev) => prev.filter((d) => d.bookId !== id));
-        setRawBudgets((prev) => prev.filter((b) => b.bookId !== id));
-        setRawContacts((prev) => prev.filter((c) => c.bookId !== id));
+        const remBooks = books.filter((b) => b.id !== id);
+        const remTx = rawTransactions.filter((t) => t.bookId !== id);
+        const remDues = rawDues.filter((d) => d.bookId !== id);
+        const remBudgets = rawBudgets.filter((b) => b.bookId !== id);
+        const remContacts = rawContacts.filter((c) => c.bookId !== id);
 
-        const remaining = books.filter((b) => b.id !== id);
-        if (remaining.length > 0) {
-          switchBook(remaining[0].id);
+        setBooks(remBooks);
+        setRawTransactions(remTx);
+        setRawDues(remDues);
+        setRawBudgets(remBudgets);
+        setRawContacts(remContacts);
+
+        persistCache({
+          books: remBooks,
+          transactions: remTx,
+          dues: remDues,
+          budgets: remBudgets,
+          contacts: remContacts,
+        });
+
+        if (remBooks.length > 0) {
+          switchBook(remBooks[0].id);
         }
         return { success: true };
       }
@@ -455,7 +490,11 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     };
 
     // Optimistic UI update
-    setRawContacts((prev) => [newContact, ...prev]);
+    setRawContacts((prev) => {
+      const updated = [newContact, ...prev];
+      persistCache({ contacts: updated });
+      return updated;
+    });
 
     // Async MySQL insert
     fetch('/api/contacts', {
@@ -475,7 +514,11 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
   };
 
   const updateContact = (id: string, data: Partial<PersonContact>) => {
-    setRawContacts((prev) => prev.map((c) => (c.id === id ? { ...c, ...data } : c)));
+    setRawContacts((prev) => {
+      const updated = prev.map((c) => (c.id === id ? { ...c, ...data } : c));
+      persistCache({ contacts: updated });
+      return updated;
+    });
 
     fetch('/api/contacts', {
       method: 'PUT',
@@ -486,11 +529,17 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
 
   const deleteContact = (id: string, deleteAssociatedDues: boolean = true) => {
     const contact = contacts.find((c: PersonContact) => c.id === id);
-    setRawContacts((prev: PersonContact[]) => prev.filter((c: PersonContact) => c.id !== id));
+    setRawContacts((prev: PersonContact[]) => {
+      const updated = prev.filter((c: PersonContact) => c.id !== id);
+      persistCache({ contacts: updated });
+      return updated;
+    });
     if (deleteAssociatedDues && contact) {
-      setRawDues((prev: PersonalDue[]) =>
-        prev.filter((d: PersonalDue) => d.personId !== id && d.personName.toLowerCase() !== contact.name.toLowerCase())
-      );
+      setRawDues((prev: PersonalDue[]) => {
+        const updated = prev.filter((d: PersonalDue) => d.personId !== id && d.personName.toLowerCase() !== contact.name.toLowerCase());
+        persistCache({ dues: updated });
+        return updated;
+      });
     }
 
     fetch(`/api/contacts?id=${encodeURIComponent(id)}`, { method: 'DELETE' }).catch((err) =>
@@ -593,7 +642,11 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     };
 
     // Optimistic UI update
-    setRawTransactions((prev) => [newTx, ...prev]);
+    setRawTransactions((prev) => {
+      const updated = [newTx, ...prev];
+      persistCache({ transactions: updated });
+      return updated;
+    });
 
     // Async MySQL insert
     fetch('/api/transactions', {
@@ -608,9 +661,13 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
   };
 
   const updateTransaction = (id: string, data: Partial<PersonalTransaction>) => {
-    setRawTransactions((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...data, amount: data.amount !== undefined ? round2(data.amount) : t.amount } : t))
-    );
+    setRawTransactions((prev) => {
+      const updated = prev.map((t) =>
+        t.id === id ? { ...t, ...data, amount: data.amount !== undefined ? round2(data.amount) : t.amount } : t
+      );
+      persistCache({ transactions: updated });
+      return updated;
+    });
 
     fetch('/api/transactions', {
       method: 'PUT',
@@ -625,7 +682,11 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
   };
 
   const deleteTransaction = (id: string) => {
-    setRawTransactions((prev) => prev.filter((t) => t.id !== id));
+    setRawTransactions((prev) => {
+      const updated = prev.filter((t) => t.id !== id);
+      persistCache({ transactions: updated });
+      return updated;
+    });
 
     fetch(`/api/transactions?id=${encodeURIComponent(id)}&userId=${encodeURIComponent(userId)}`, {
       method: 'DELETE',
@@ -668,7 +729,11 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     };
 
     // Optimistic UI update
-    setRawDues((prev) => [newDue, ...prev]);
+    setRawDues((prev) => {
+      const updated = [newDue, ...prev];
+      persistCache({ dues: updated });
+      return updated;
+    });
 
     // Async MySQL insert
     fetch('/api/dues', {
@@ -704,12 +769,12 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     const rounded = round2(amount);
     const newPaid = round2(targetDue.paidAmount + rounded);
     const newRemaining = Math.max(0, round2(targetDue.originalAmount - newPaid));
-    const newStatus = newRemaining === 0 ? 'SETTLED' : 'ACTIVE';
+    const newStatus: 'ACTIVE' | 'SETTLED' = newRemaining === 0 ? 'SETTLED' : 'ACTIVE';
     const currentDate = new Date().toISOString().split('T')[0];
 
     // Optimistic UI update
-    setRawDues((prev) =>
-      prev.map((d) =>
+    setRawDues((prev) => {
+      const updated = prev.map((d) =>
         d.id === dueId
           ? {
               ...d,
@@ -718,8 +783,10 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
               status: newStatus,
             }
           : d
-      )
-    );
+      );
+      persistCache({ dues: updated });
+      return updated;
+    });
 
     // Async MySQL update
     fetch('/api/dues', {
@@ -749,21 +816,23 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
   };
 
   const updateDue = (id: string, data: Partial<PersonalDue>) => {
-    setRawDues((prev) =>
-      prev.map((d) => {
+    setRawDues((prev) => {
+      const updated = prev.map((d) => {
         if (d.id !== id) return d;
-        const updated = { ...d, ...data };
+        const upd = { ...d, ...data };
         if (data.originalAmount !== undefined || data.paidAmount !== undefined) {
           const orig = round2(data.originalAmount !== undefined ? Number(data.originalAmount) : d.originalAmount);
           const paid = round2(data.paidAmount !== undefined ? Number(data.paidAmount) : d.paidAmount);
-          updated.originalAmount = orig;
-          updated.paidAmount = paid;
-          updated.remainingAmount = Math.max(0, round2(orig - paid));
-          updated.status = updated.remainingAmount === 0 ? 'SETTLED' : 'ACTIVE';
+          upd.originalAmount = orig;
+          upd.paidAmount = paid;
+          upd.remainingAmount = Math.max(0, round2(orig - paid));
+          upd.status = upd.remainingAmount === 0 ? 'SETTLED' : 'ACTIVE';
         }
-        return updated;
-      })
-    );
+        return upd;
+      });
+      persistCache({ dues: updated });
+      return updated;
+    });
 
     fetch('/api/dues', {
       method: 'PUT',
@@ -777,7 +846,11 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
   };
 
   const deleteDue = (id: string) => {
-    setRawDues((prev) => prev.filter((d) => d.id !== id));
+    setRawDues((prev) => {
+      const updated = prev.filter((d) => d.id !== id);
+      persistCache({ dues: updated });
+      return updated;
+    });
 
     fetch(`/api/dues?id=${encodeURIComponent(id)}`, { method: 'DELETE' }).catch((err) =>
       console.error('Failed to delete due in MySQL', err)
@@ -790,10 +863,14 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     const targetBookId = currentBook?.id;
     setRawBudgets((prev) => {
       const existing = prev.find((b) => b.category === category && (!b.bookId || b.bookId === targetBookId));
+      let updated;
       if (existing) {
-        return prev.map((b) => (b.id === existing.id ? { ...b, monthlyLimit: limit } : b));
+        updated = prev.map((b) => (b.id === existing.id ? { ...b, monthlyLimit: limit } : b));
+      } else {
+        updated = [...prev, { id: `bg-${Date.now()}`, userId, bookId: targetBookId, category, monthlyLimit: limit }];
       }
-      return [...prev, { id: `bg-${Date.now()}`, userId, bookId: targetBookId, category, monthlyLimit: limit }];
+      persistCache({ budgets: updated });
+      return updated;
     });
 
     fetch('/api/budgets', {
@@ -817,7 +894,9 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     setExpenseCategories(EXPENSE_CATEGORIES);
     setIncomeCategories(INCOME_CATEGORIES);
     setPaymentModes(DEFAULT_PAYMENT_MODES);
-    localStorage.clear();
+    if (typeof window !== 'undefined' && userId) {
+      localStorage.removeItem(`finbook_cache_v2_${userId}`);
+    }
   };
 
   // Metrics

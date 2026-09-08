@@ -1,10 +1,13 @@
 import { pool } from './db';
 
-let schemaInitialized = false;
+declare global {
+  // eslint-disable-next-line no-var
+  var booksSchemaInitialized: boolean | undefined;
+}
 
-// Helper to ensure books table and foreign/column links exist
+// Helper to ensure books table and foreign/column links exist (runs only once per process)
 export async function ensureBooksSchema() {
-  if (schemaInitialized) return;
+  if (globalThis.booksSchemaInitialized) return;
   try {
     // 1. Create books table
     await pool.query(`
@@ -24,53 +27,38 @@ export async function ensureBooksSchema() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
-    // 2. Ensure book_id exists on transactions
-    const [txCols]: any = await pool.query(
-      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'book_id'`
-    );
-    if (!txCols || txCols.length === 0) {
-      await pool.query(`ALTER TABLE transactions ADD COLUMN book_id VARCHAR(64) NULL AFTER user_id`);
-      try {
-        await pool.query(`CREATE INDEX idx_transactions_book ON transactions (book_id)`);
-      } catch {}
+    // 2. Check and add columns in parallel
+    const [cols]: any = await pool.query(`
+      SELECT TABLE_NAME, COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+        AND COLUMN_NAME = 'book_id' 
+        AND TABLE_NAME IN ('transactions', 'dues', 'budgets', 'contacts')
+    `);
+
+    const existingTablesWithBookId = new Set(cols.map((r: any) => r.TABLE_NAME));
+
+    const alterPromises = [];
+    if (!existingTablesWithBookId.has('transactions')) {
+      alterPromises.push(pool.query(`ALTER TABLE transactions ADD COLUMN book_id VARCHAR(64) NULL AFTER user_id`));
+    }
+    if (!existingTablesWithBookId.has('dues')) {
+      alterPromises.push(pool.query(`ALTER TABLE dues ADD COLUMN book_id VARCHAR(64) NULL AFTER user_id`));
+    }
+    if (!existingTablesWithBookId.has('budgets')) {
+      alterPromises.push(pool.query(`ALTER TABLE budgets ADD COLUMN book_id VARCHAR(64) NULL AFTER user_id`));
+    }
+    if (!existingTablesWithBookId.has('contacts')) {
+      alterPromises.push(pool.query(`ALTER TABLE contacts ADD COLUMN book_id VARCHAR(64) NULL AFTER user_id`));
     }
 
-    // 3. Ensure book_id exists on dues
-    const [dueCols]: any = await pool.query(
-      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'dues' AND COLUMN_NAME = 'book_id'`
-    );
-    if (!dueCols || dueCols.length === 0) {
-      await pool.query(`ALTER TABLE dues ADD COLUMN book_id VARCHAR(64) NULL AFTER user_id`);
-      try {
-        await pool.query(`CREATE INDEX idx_dues_book ON dues (book_id)`);
-      } catch {}
+    if (alterPromises.length > 0) {
+      await Promise.allSettled(alterPromises);
     }
 
-    // 4. Ensure book_id exists on budgets
-    const [bgCols]: any = await pool.query(
-      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'budgets' AND COLUMN_NAME = 'book_id'`
-    );
-    if (!bgCols || bgCols.length === 0) {
-      await pool.query(`ALTER TABLE budgets ADD COLUMN book_id VARCHAR(64) NULL AFTER user_id`);
-      try {
-        await pool.query(`CREATE INDEX idx_budgets_book ON budgets (book_id)`);
-      } catch {}
-    }
-
-    // 5. Ensure book_id exists on contacts
-    const [cntCols]: any = await pool.query(
-      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'contacts' AND COLUMN_NAME = 'book_id'`
-    );
-    if (!cntCols || cntCols.length === 0) {
-      await pool.query(`ALTER TABLE contacts ADD COLUMN book_id VARCHAR(64) NULL AFTER user_id`);
-      try {
-        await pool.query(`CREATE INDEX idx_contacts_book ON contacts (book_id)`);
-      } catch {}
-    }
-
-    schemaInitialized = true;
+    globalThis.booksSchemaInitialized = true;
   } catch (e: any) {
     console.error('Books schema initialization error:', e);
-    schemaInitialized = true;
+    globalThis.booksSchemaInitialized = true;
   }
 }
