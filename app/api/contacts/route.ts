@@ -1,27 +1,38 @@
 import { NextResponse } from 'next/server';
 import { pool } from '@/lib/db';
+import { ensureBooksSchema } from '@/lib/books-schema';
 
 export const dynamic = 'force-dynamic';
 
-// GET: Fetch all contacts for a user
+// GET: Fetch all contacts for a user (and optional bookId)
 export async function GET(request: Request) {
   try {
+    await ensureBooksSchema();
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId') || 'user-sample';
+    const bookId = searchParams.get('bookId');
 
-    const [rows]: any = await pool.query(
-      `SELECT 
+    let query = `
+      SELECT 
         id, 
         user_id as userId, 
+        book_id as bookId,
         name, 
         phone, 
         notes, 
         created_at as createdAt 
        FROM contacts 
-       WHERE user_id = ? 
-       ORDER BY name ASC`,
-      [userId]
-    );
+       WHERE user_id = ?`;
+    const params: any[] = [userId];
+
+    if (bookId) {
+      query += ` AND (book_id = ? OR book_id IS NULL)`;
+      params.push(bookId);
+    }
+
+    query += ` ORDER BY name ASC`;
+
+    const [rows]: any = await pool.query(query, params);
 
     return NextResponse.json({ success: true, data: rows });
   } catch (error: any) {
@@ -36,10 +47,12 @@ export async function GET(request: Request) {
 // POST: Add new contact
 export async function POST(request: Request) {
   try {
+    await ensureBooksSchema();
     const body = await request.json();
     const {
       id = `contact-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       userId = 'user-sample',
+      bookId = null,
       name,
       phone = null,
       notes = '',
@@ -53,13 +66,14 @@ export async function POST(request: Request) {
     }
 
     await pool.query(
-      `INSERT INTO contacts (id, user_id, name, phone, notes) VALUES (?, ?, ?, ?, ?)`,
-      [id, userId, name.trim(), phone, notes]
+      `INSERT INTO contacts (id, user_id, book_id, name, phone, notes) VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, userId, bookId, name.trim(), phone, notes]
     );
 
     const newContact = {
       id,
       userId,
+      bookId,
       name: name.trim(),
       phone,
       notes,
@@ -79,8 +93,9 @@ export async function POST(request: Request) {
 // PUT: Update contact
 export async function PUT(request: Request) {
   try {
+    await ensureBooksSchema();
     const body = await request.json();
-    const { id, name, phone, notes } = body;
+    const { id, bookId, name, phone, notes } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'Contact ID is required' }, { status: 400 });
@@ -89,6 +104,10 @@ export async function PUT(request: Request) {
     const updates: string[] = [];
     const values: any[] = [];
 
+    if (bookId !== undefined) {
+      updates.push('book_id = ?');
+      values.push(bookId);
+    }
     if (name !== undefined) {
       updates.push('name = ?');
       values.push(name.trim());

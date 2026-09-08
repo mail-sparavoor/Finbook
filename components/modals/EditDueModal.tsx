@@ -12,7 +12,7 @@ interface EditDueModalProps {
 }
 
 export default function EditDueModal({ isOpen, onClose, due }: EditDueModalProps) {
-  const { updateDue, contacts } = usePersonalFinance();
+  const { profile, updateDue, contacts } = usePersonalFinance();
 
   const [type, setType] = useState<DueType>('I_LENT');
   const [selectedPersonId, setSelectedPersonId] = useState('');
@@ -134,7 +134,7 @@ export default function EditDueModal({ isOpen, onClose, due }: EditDueModalProps
             {/* Amounts */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block font-semibold text-slate-700">Original Amount (₹) *</label>
+                <label className="block font-semibold text-slate-700">Original Amount ({profile.currencySymbol}) *</label>
                 <input
                   type="number"
                   step="0.01"
@@ -146,7 +146,7 @@ export default function EditDueModal({ isOpen, onClose, due }: EditDueModalProps
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700">Paid Amount (₹)</label>
+                <label className="block font-semibold text-slate-700">Paid Amount ({profile.currencySymbol})</label>
                 <input
                   type="number"
                   step="0.01"

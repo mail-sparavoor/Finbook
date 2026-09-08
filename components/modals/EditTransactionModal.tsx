@@ -13,6 +13,7 @@ interface EditTransactionModalProps {
 
 export default function EditTransactionModal({ isOpen, onClose, transaction }: EditTransactionModalProps) {
   const {
+    profile,
     updateTransaction,
     expenseCategories,
     incomeCategories,
@@ -155,7 +156,7 @@ export default function EditTransactionModal({ isOpen, onClose, transaction }: E
 
             {/* Amount */}
             <div>
-              <label className="block font-semibold text-slate-700">Amount (₹) *</label>
+              <label className="block font-semibold text-slate-700">Amount ({profile.currencySymbol}) *</label>
               <input
                 type="number"
                 inputMode="decimal"

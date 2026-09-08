@@ -8,11 +8,13 @@ interface AuthContextType {
   currentUser: UserAccount | null;
   users: UserAccount[];
   isLoading: boolean;
-  login: (emailOrUsername: string, password: string) => Promise<{ success: boolean; user?: UserAccount; error?: string }>;
+  login: (emailOrPhoneOrUsername: string, password: string) => Promise<{ success: boolean; user?: UserAccount; error?: string }>;
   logout: () => void;
   createUserAccount: (data: {
     name: string;
-    email: string;
+    email?: string;
+    phone?: string;
+    identifier?: string;
     password: string;
     role?: UserRole;
     status?: UserStatus;
@@ -137,13 +139,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const login = async (emailOrUsername: string, password: string): Promise<{ success: boolean; user?: UserAccount; error?: string }> => {
-    const cleanId = emailOrUsername.trim().toLowerCase();
+  const login = async (emailOrPhoneOrUsername: string, password: string): Promise<{ success: boolean; user?: UserAccount; error?: string }> => {
+    const raw = (emailOrPhoneOrUsername || '').trim();
+    const cleanId = raw.toLowerCase();
+    const digitsOnly = raw.replace(/[\s\-\(\)]/g, '');
+
     try {
       const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'LOGIN', email: cleanId, password }),
+        body: JSON.stringify({ action: 'LOGIN', identifier: raw, password }),
       });
       const json = await res.json();
       if (json.success && json.user) {
@@ -151,7 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('myfinbook_session_user', JSON.stringify(json.user));
         localStorage.setItem('myfinbook_session_user_id', json.user.id);
         return { success: true, user: json.user };
-      } else if (res.status === 401 || res.status === 403 || res.status === 404) {
+      } else if (res.status === 401 || res.status === 403 || res.status === 404 || !json.success) {
         return { success: false, error: json.error || 'Authentication failed' };
       }
     } catch (e) {
@@ -159,12 +164,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Fallback authentication
-    const foundUser = users.find(
-      (u) => (u.email.toLowerCase() === cleanId || u.name.toLowerCase() === cleanId)
-    );
+    const foundUser = users.find((u) => {
+      const uEmail = (u.email || '').toLowerCase();
+      const uPhone = (u.phone || '').replace(/[\s\-\(\)]/g, '');
+      const uName = (u.name || '').toLowerCase();
+      return (
+        (uEmail && uEmail === cleanId) ||
+        (uPhone && (uPhone === digitsOnly || u.phone === raw)) ||
+        uName === cleanId
+      );
+    });
 
     if (!foundUser) {
-      return { success: false, error: 'User account not found with this email or username.' };
+      return { success: false, error: 'User account not found with this email, mobile number, or username.' };
     }
 
     if (foundUser.password !== password) {
@@ -192,16 +204,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const createUserAccount = async (data: {
     name: string;
-    email: string;
+    email?: string;
+    phone?: string;
+    identifier?: string;
     password: string;
     role?: UserRole;
     status?: UserStatus;
     currency?: string;
     currencySymbol?: string;
   }): Promise<{ success: boolean; user?: UserAccount; error?: string }> => {
-    const cleanEmail = data.email.trim().toLowerCase();
-    if (!cleanEmail || !data.name.trim() || !data.password) {
-      return { success: false, error: 'Please provide all required fields (Name, Email, Password).' };
+    const cleanName = data.name ? data.name.trim() : '';
+    const cleanEmail = data.email ? data.email.trim().toLowerCase() : '';
+    const cleanPhone = data.phone ? data.phone.trim() : '';
+
+    if (!cleanName || !data.password) {
+      return { success: false, error: 'Please provide full name and password.' };
+    }
+
+    if (!cleanEmail || !cleanPhone) {
+      return { success: false, error: 'Please provide both your email address and mobile number.' };
     }
 
     try {
@@ -210,8 +231,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'REGISTER',
-          name: data.name,
+          name: cleanName,
           email: cleanEmail,
+          phone: cleanPhone,
           password: data.password,
           role: data.role || 'USER',
           currency: data.currency || 'INR',
@@ -231,8 +253,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const newUser: UserAccount = {
       id: `user-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      name: data.name.trim(),
+      name: cleanName,
       email: cleanEmail,
+      phone: cleanPhone,
       password: data.password,
       role: data.role || 'USER',
       status: data.status || 'ACTIVE',

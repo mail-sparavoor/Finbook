@@ -728,7 +728,7 @@ export default function DuesPage() {
                 </span>
                 <div className="text-2xl font-extrabold font-mono mt-0.5">
                   {activeSelectedLedger.status === 'SETTLED'
-                    ? '₹0.00 (All Settled)'
+                    ? `${formatCurrency(0, profile.currencySymbol)} (All Settled)`
                     : formatCurrency(Math.abs(activeSelectedLedger.netBalance), profile.currencySymbol)}
                 </div>
                 <div className="text-xs mt-1 opacity-90">

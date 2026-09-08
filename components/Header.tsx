@@ -15,6 +15,7 @@ import {
   Check,
 } from 'lucide-react';
 import Link from 'next/link';
+import BookSwitcher from './BookSwitcher';
 
 interface HeaderProps {
   onOpenQuickAdd: (tab?: 'EXPENSE' | 'INCOME' | 'DUE') => void;
@@ -97,8 +98,9 @@ export default function Header({ onOpenQuickAdd, onOpenSearch }: HeaderProps) {
         )}
       </div>
 
-      {/* Right: User Menu */}
-      <div className="flex items-center gap-2.5">
+      {/* Right: Book Switcher & User Menu */}
+      <div className="flex items-center gap-2 sm:gap-2.5">
+        {!isAdmin && <BookSwitcher compact />}
 
         {/* User Account Menu Dropdown */}
         <div className="relative" ref={menuRef}>

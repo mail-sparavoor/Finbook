@@ -1,18 +1,22 @@
 import { NextResponse } from 'next/server';
 import { pool } from '@/lib/db';
+import { ensureBooksSchema } from '@/lib/books-schema';
 
 export const dynamic = 'force-dynamic';
 
-// GET: Fetch transactions for a user
+// GET: Fetch transactions for a user (and optional bookId)
 export async function GET(request: Request) {
   try {
+    await ensureBooksSchema();
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId') || 'user-sample';
+    const bookId = searchParams.get('bookId');
 
-    const [rows]: any = await pool.query(
-      `SELECT 
+    let query = `
+      SELECT 
         id, 
         user_id as userId, 
+        book_id as bookId,
         DATE_FORMAT(date, '%Y-%m-%d') as date, 
         type, 
         category, 
@@ -24,10 +28,17 @@ export async function GET(request: Request) {
         notes, 
         created_at as createdAt 
        FROM transactions 
-       WHERE user_id = ? 
-       ORDER BY date DESC, created_at DESC`,
-      [userId]
-    );
+       WHERE user_id = ?`;
+    const params: any[] = [userId];
+
+    if (bookId) {
+      query += ` AND (book_id = ? OR book_id IS NULL)`;
+      params.push(bookId);
+    }
+
+    query += ` ORDER BY date DESC, created_at DESC`;
+
+    const [rows]: any = await pool.query(query, params);
 
     return NextResponse.json({ success: true, data: rows });
   } catch (error: any) {
@@ -42,10 +53,12 @@ export async function GET(request: Request) {
 // POST: Create a new transaction
 export async function POST(request: Request) {
   try {
+    await ensureBooksSchema();
     const body = await request.json();
     const {
       id = `tx-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       userId = 'user-sample',
+      bookId = null,
       date = new Date().toISOString().split('T')[0],
       type,
       category,
@@ -66,11 +79,12 @@ export async function POST(request: Request) {
 
     await pool.query(
       `INSERT INTO transactions 
-        (id, user_id, date, type, category, amount, payment_mode, person_id, person_name, account_id, notes) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, user_id, book_id, date, type, category, amount, payment_mode, person_id, person_name, account_id, notes) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         userId,
+        bookId,
         date,
         type,
         category,
@@ -86,6 +100,7 @@ export async function POST(request: Request) {
     const newTx = {
       id,
       userId,
+      bookId,
       date,
       type,
       category,
@@ -111,9 +126,11 @@ export async function POST(request: Request) {
 // PUT: Update an existing transaction
 export async function PUT(request: Request) {
   try {
+    await ensureBooksSchema();
     const body = await request.json();
     const {
       id,
+      bookId,
       date,
       type,
       category,
@@ -135,6 +152,10 @@ export async function PUT(request: Request) {
     const updates: string[] = [];
     const values: any[] = [];
 
+    if (bookId !== undefined) {
+      updates.push('book_id = ?');
+      values.push(bookId);
+    }
     if (date !== undefined) {
       updates.push('date = ?');
       values.push(date);
@@ -190,6 +211,7 @@ export async function PUT(request: Request) {
       `SELECT 
         id, 
         user_id as userId, 
+        book_id as bookId,
         DATE_FORMAT(date, '%Y-%m-%d') as date, 
         type, 
         category, 

@@ -20,6 +20,7 @@ interface QuickAddModalProps {
 
 export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' }: QuickAddModalProps) {
   const {
+    profile,
     addTransaction,
     addDue,
     contacts,
@@ -217,7 +218,9 @@ export default function QuickAddModal({ isOpen, onClose, defaultTab = 'EXPENSE' 
             <form onSubmit={handleSave} className="mt-4 space-y-3.5 text-xs">
               {/* Amount */}
               <div>
-                <label className="block font-semibold text-slate-700">Amount (₹) *</label>
+                <label className="block font-semibold text-slate-700">
+                  Amount ({profile.currencySymbol}) *
+                </label>
                 <input
                   type="number"
                   inputMode="decimal"

@@ -16,6 +16,7 @@ import {
   X,
   Lock,
   Mail,
+  Phone,
   User,
   Power,
   ArrowRight,
@@ -43,6 +44,7 @@ export default function AdminUsersPage() {
   // New User Form State
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
+  const [newPhone, setNewPhone] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<UserRole>('USER');
   const [newCurrency, setNewCurrency] = useState('INR');
@@ -53,6 +55,7 @@ export default function AdminUsersPage() {
   // Edit User Form State
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [editPhone, setEditPhone] = useState('');
   const [editRole, setEditRole] = useState<UserRole>('USER');
   const [editStatus, setEditStatus] = useState<UserStatus>('ACTIVE');
 
@@ -70,7 +73,11 @@ export default function AdminUsersPage() {
 
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+        return (
+          u.name.toLowerCase().includes(q) ||
+          (u.email && u.email.toLowerCase().includes(q)) ||
+          (u.phone && u.phone.toLowerCase().includes(q))
+        );
       }
       return true;
     });
@@ -108,6 +115,7 @@ export default function AdminUsersPage() {
   const handleOpenCreate = () => {
     setNewName('');
     setNewEmail('');
+    setNewPhone('');
     setNewPassword('');
     setNewRole('USER');
     setNewCurrency('INR');
@@ -121,9 +129,15 @@ export default function AdminUsersPage() {
     e.preventDefault();
     setFormError(null);
 
+    if (!newEmail.trim() && !newPhone.trim()) {
+      setFormError('Please provide at least an Email address or Mobile number.');
+      return;
+    }
+
     const result = await createUserAccount({
       name: newName,
-      email: newEmail,
+      email: newEmail.trim() || undefined,
+      phone: newPhone.trim() || undefined,
       password: newPassword,
       role: newRole,
       currency: newCurrency,
@@ -142,7 +156,8 @@ export default function AdminUsersPage() {
   const handleOpenEdit = (u: UserAccount) => {
     setSelectedUser(u);
     setEditName(u.name);
-    setEditEmail(u.email);
+    setEditEmail(u.email || '');
+    setEditPhone(u.phone || '');
     setEditRole(u.role);
     setEditStatus(u.status);
     setFormError(null);
@@ -156,7 +171,8 @@ export default function AdminUsersPage() {
 
     const result = await updateUserAccount(selectedUser.id, {
       name: editName,
-      email: editEmail,
+      email: editEmail.trim() || undefined,
+      phone: editPhone.trim() || undefined,
       role: editRole,
       status: editStatus,
     });
@@ -376,7 +392,20 @@ export default function AdminUsersPage() {
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-slate-500 font-mono mt-0.5">{u.email}</div>
+                            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-slate-500 font-mono mt-0.5">
+                              {u.email && (
+                                <span className="flex items-center gap-1">
+                                  <Mail size={10} className="text-slate-400" />
+                                  {u.email}
+                                </span>
+                              )}
+                              {u.phone && (
+                                <span className="flex items-center gap-1">
+                                  <Phone size={10} className="text-slate-400" />
+                                  {u.phone}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -510,16 +539,28 @@ export default function AdminUsersPage() {
                 />
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Email / Login ID *</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="e.g. john@example.com"
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-blue-600 focus:outline-none"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Email ID</label>
+                  <input
+                    type="email"
+                    placeholder="e.g. john@example.com"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-blue-600 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Mobile Number</label>
+                  <input
+                    type="tel"
+                    placeholder="e.g. +91 98765 43210"
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-blue-600 focus:outline-none"
+                  />
+                </div>
               </div>
 
               <div>
@@ -625,15 +666,26 @@ export default function AdminUsersPage() {
                 />
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Email / Login ID</label>
-                <input
-                  type="email"
-                  required
-                  value={editEmail}
-                  onChange={(e) => setEditEmail(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-blue-600 focus:outline-none"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Email ID</label>
+                  <input
+                    type="email"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-blue-600 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Mobile Number</label>
+                  <input
+                    type="tel"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-blue-600 focus:outline-none"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

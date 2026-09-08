@@ -120,11 +120,24 @@ export default function PersonalDashboardPage() {
           </p>
         </div>
 
-        <div className="flex flex-col sm:items-end gap-3 self-start sm:self-auto">
-          <div className="rounded-xl bg-white/10 px-4 sm:px-5 py-2 sm:py-2.5 backdrop-blur w-full sm:w-auto text-left sm:text-right">
-            <div className="text-[10px] uppercase font-bold text-blue-200">Total Net Balance</div>
-            <div className="text-xl sm:text-2xl font-extrabold text-white font-mono mt-0.5">
-              {formatCurrency(metrics.totalNetWorth, profile.currencySymbol)}
+        <div className="flex flex-col sm:items-end gap-3 w-full sm:w-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 w-full sm:w-auto">
+            {/* Total Net Balance */}
+            <div className="rounded-xl bg-white/10 px-3.5 sm:px-4 py-2 backdrop-blur text-left sm:text-right border border-white/10">
+              <div className="text-[10px] uppercase font-bold text-blue-200">Total Net Balance</div>
+              <div className="text-lg sm:text-2xl font-extrabold text-white font-mono mt-0.5">
+                {formatCurrency(metrics.totalNetWorth, profile.currencySymbol)}
+              </div>
+            </div>
+
+            {/* Net Balance Excluding Dues & Loans */}
+            <div className="rounded-xl bg-white/15 px-3.5 sm:px-4 py-2 backdrop-blur text-left sm:text-right border border-white/20 shadow-xs">
+              <div className="text-[10px] uppercase font-bold text-blue-200 flex items-center gap-1">
+                <span>Net (Excl. Loans)</span>
+              </div>
+              <div className="text-lg sm:text-2xl font-extrabold text-white font-mono mt-0.5">
+                {formatCurrency(metrics.netBalanceExcludingLoans, profile.currencySymbol)}
+              </div>
             </div>
           </div>
 
@@ -169,7 +182,7 @@ export default function PersonalDashboardPage() {
             +{formatCurrency(metrics.totalIncome, profile.currencySymbol)}
           </div>
           <div className="mt-1.5 text-[10px] sm:text-[11px] text-slate-500 border-t border-slate-100 pt-1.5 hidden sm:block truncate">
-            Total Recorded
+            Core: +{formatCurrency(metrics.coreIncome, profile.currencySymbol)}
           </div>
         </div>
 
@@ -185,7 +198,7 @@ export default function PersonalDashboardPage() {
             -{formatCurrency(metrics.totalExpenses, profile.currencySymbol)}
           </div>
           <div className="mt-1.5 text-[10px] sm:text-[11px] text-slate-500 border-t border-slate-100 pt-1.5 hidden sm:block truncate">
-            Total Recorded
+            Core: -{formatCurrency(metrics.coreExpenses, profile.currencySymbol)}
           </div>
         </div>
 
@@ -201,7 +214,7 @@ export default function PersonalDashboardPage() {
             {formatCurrency(metrics.netSavings, profile.currencySymbol)}
           </div>
           <div className="mt-1.5 text-[10px] sm:text-[11px] text-blue-700 font-semibold border-t border-slate-100 pt-1.5 hidden sm:block truncate">
-            Rate: {metrics.savingsRate}%
+            Excl. Loans: {formatCurrency(metrics.netBalanceExcludingLoans, profile.currencySymbol)}
           </div>
         </div>
 

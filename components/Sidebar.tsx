@@ -17,6 +17,7 @@ import {
   BookOpen,
   Shield,
 } from 'lucide-react';
+import BookSwitcher from './BookSwitcher';
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -74,12 +75,12 @@ export default function Sidebar() {
   return (
     <aside className="hidden md:flex flex-col w-60 border-r border-slate-200 bg-white min-h-screen text-slate-700 select-none no-print">
       {/* Brand Logo */}
-      <div className="flex h-16 items-center gap-2.5 px-6 border-b border-slate-200">
-        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
-          <BookOpen size={18} className="stroke-[2.5]" />
+      <div className="flex h-16 items-center gap-3 px-5 border-b border-slate-200">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-500/20">
+          <BookOpen size={20} className="stroke-[2.5]" />
         </div>
         <div>
-          <div className="text-base font-bold tracking-tight text-slate-900">
+          <div className="text-base font-extrabold tracking-tight text-slate-900">
             Fin<span className="text-blue-600">Book</span>
           </div>
           <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
@@ -87,6 +88,13 @@ export default function Sidebar() {
           </div>
         </div>
       </div>
+
+      {/* Book Switcher (for regular users) */}
+      {!isAdmin && (
+        <div className="px-3 pt-3 pb-1">
+          <BookSwitcher />
+        </div>
+      )}
 
       {/* Nav Link List */}
       <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">

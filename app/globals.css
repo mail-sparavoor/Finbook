@@ -18,7 +18,9 @@
     -moz-osx-font-smoothing: grayscale;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
-    overscroll-behavior-y: none;
+    overscroll-behavior-y: contain;
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
   }
 
   /* Prevent text selection on interactive UI elements for native app feel */
@@ -27,6 +29,16 @@
     user-select: none;
     -webkit-touch-callout: none;
   }
+
+  input, textarea, select {
+    font-size: 16px !important; /* Prevents auto-zoom on iOS when tapping input fields */
+  }
+
+  @media (min-width: 640px) {
+    input, textarea, select {
+      font-size: 0.875rem !important; /* 14px on desktop/tablets */
+    }
+  }
 }
 
 /* Native-feel smooth scrolling */
@@ -34,7 +46,16 @@
   -webkit-overflow-scrolling: touch;
 }
 
-/* Custom Minimalist Scrollbar */
+/* Hide scrollbar for horizontally scrollable tabs on mobile */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Custom Minimalist Scrollbar on Desktop */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
@@ -50,10 +71,14 @@
   background: #94a3b8;
 }
 
-/* Smooth Touch Interactions */
-button, a {
+/* Smooth Touch Feedback */
+button, a, [role="button"] {
   touch-action: manipulation;
-  transition: all 0.15s ease-in-out;
+}
+
+.tap-active:active {
+  transform: scale(0.97);
+  transition: transform 0.1s ease-out;
 }
 
 /* Safe area padding utilities */

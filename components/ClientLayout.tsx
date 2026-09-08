@@ -85,12 +85,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       <Sidebar />
 
       {/* Main Content Area */}
-      <div className="flex flex-1 flex-col min-w-0 w-full pb-20 md:pb-0">
+      <div className="flex flex-1 flex-col min-w-0 w-full pb-[calc(5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
         <Header
           onOpenQuickAdd={handleOpenQuickAdd}
           onOpenSearch={() => setSearchOpen(true)}
         />
-        <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-6xl w-full mx-auto">
+        <main className="flex-1 p-3.5 sm:p-5 md:p-6 lg:p-8 max-w-6xl w-full mx-auto">
           {children}
         </main>
       </div>

@@ -4,8 +4,23 @@
 
 export type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER';
 
+export interface PersonalBook {
+  id: string;
+  userId: string;
+  name: string;
+  description?: string;
+  currency: string;
+  currencySymbol: string;
+  color: string;
+  icon?: string;
+  isDefault: boolean;
+  createdAt: string;
+}
+
 export interface PersonContact {
   id: string;
+  userId?: string;
+  bookId?: string;
   name: string;
   phone?: string;
   notes?: string;
@@ -14,6 +29,8 @@ export interface PersonContact {
 
 export interface PersonalTransaction {
   id: string;
+  userId?: string;
+  bookId?: string;
   date: string; // YYYY-MM-DD
   type: TransactionType;
   category: string;
@@ -30,6 +47,8 @@ export type DueType = 'I_LENT' | 'I_BORROWED';
 
 export interface PersonalDue {
   id: string;
+  userId?: string;
+  bookId?: string;
   personId?: string;
   personName: string;
   phone?: string;
@@ -45,6 +64,8 @@ export interface PersonalDue {
 
 export interface PersonalBudget {
   id: string;
+  userId?: string;
+  bookId?: string;
   category: string;
   monthlyLimit: number;
   icon?: string;
@@ -53,6 +74,7 @@ export interface PersonalBudget {
 export interface PersonalProfile {
   name: string;
   email?: string;
+  phone?: string;
   currency: string;
   currencySymbol: string;
 }
@@ -67,8 +89,9 @@ export type UserStatus = 'ACTIVE' | 'DISABLED';
 export interface UserAccount {
   id: string;
   name: string;
-  email: string;
-  password: string;
+  email?: string;
+  phone?: string;
+  password?: string;
   role: UserRole;
   status: UserStatus;
   currency: string;

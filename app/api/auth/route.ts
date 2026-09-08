@@ -3,15 +3,39 @@ import { pool } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
+// Helper to ensure phone column exists on users table
+let schemaChecked = false;
+async function ensureSchema() {
+  if (schemaChecked) return;
+  try {
+    const [cols]: any = await pool.query(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'phone'`
+    );
+    if (!cols || cols.length === 0) {
+      await pool.query(`ALTER TABLE users ADD COLUMN phone VARCHAR(30) NULL AFTER email`);
+    }
+    schemaChecked = true;
+  } catch (e) {
+    // If schema query fails, fallback silently
+    schemaChecked = true;
+  }
+}
+
+// Clean phone number helper
+function normalizePhone(phoneStr: string): string {
+  return phoneStr.replace(/[\s\-\(\)]/g, '').trim();
+}
+
 // GET: Fetch all users (for admin) or single user
 export async function GET(request: Request) {
   try {
+    await ensureSchema();
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('id');
 
     if (userId) {
       const [rows]: any = await pool.query(
-        `SELECT id, name, email, role, status, currency, currency_symbol as currencySymbol, created_at as createdAt 
+        `SELECT id, name, email, phone, role, status, currency, currency_symbol as currencySymbol, created_at as createdAt 
          FROM users WHERE id = ?`,
         [userId]
       );
@@ -29,7 +53,7 @@ export async function GET(request: Request) {
     } catch {}
 
     const [rows]: any = await pool.query(
-      `SELECT id, name, email, password_hash as password, role, status, currency, currency_symbol as currencySymbol, created_at as createdAt 
+      `SELECT id, name, email, phone, password_hash as password, role, status, currency, currency_symbol as currencySymbol, created_at as createdAt 
        FROM users 
        ORDER BY created_at ASC`
     );
@@ -47,28 +71,54 @@ export async function GET(request: Request) {
 // POST: Login verification or user registration
 export async function POST(request: Request) {
   try {
+    await ensureSchema();
     const body = await request.json();
-    const { action = 'LOGIN', email, password, name, role = 'USER', currency = 'INR', currencySymbol = '₹' } = body;
+    const {
+      action = 'LOGIN',
+      email,
+      phone,
+      identifier,
+      password,
+      name,
+      role = 'USER',
+      currency = 'INR',
+      currencySymbol = '₹',
+    } = body;
 
     if (action === 'LOGIN') {
-      const cleanIdentifier = (email || '').trim().toLowerCase();
+      const rawIdentifier = (identifier || email || phone || '').trim();
+      if (!rawIdentifier || !password) {
+        return NextResponse.json(
+          { success: false, error: 'Please provide your email/phone and password.' },
+          { status: 400 }
+        );
+      }
+
+      const cleanLower = rawIdentifier.toLowerCase();
+      const cleanDigits = normalizePhone(rawIdentifier);
+
       const [rows]: any = await pool.query(
-        `SELECT id, name, email, password_hash as password, role, status, currency, currency_symbol as currencySymbol, created_at as createdAt 
+        `SELECT id, name, email, phone, password_hash as password, role, status, currency, currency_symbol as currencySymbol, created_at as createdAt 
          FROM users 
-         WHERE LOWER(email) = ? OR LOWER(name) = ?`,
-        [cleanIdentifier, cleanIdentifier]
+         WHERE LOWER(email) = ? 
+            OR phone = ? 
+            OR phone = ?
+            OR LOWER(name) = ?
+         LIMIT 1`,
+        [cleanLower, rawIdentifier, cleanDigits, cleanLower]
       );
 
       if (rows.length === 0) {
         return NextResponse.json(
-          { success: false, error: 'Account not found with this email or username' },
+          { success: false, error: 'No account found with this email, mobile number, or username.' },
           { status: 404 }
         );
       }
 
       const user = rows[0];
       const isDefaultAdminMatch =
-        (user.email.toLowerCase() === 'admin@myfinbook.com' || user.id === 'user-admin') && password === 'admin123';
+        ((user.email && user.email.toLowerCase() === 'admin@myfinbook.com') || user.id === 'user-admin') &&
+        password === 'admin123';
       const isDirectMatch = user.password === password || user.password === '$2y$10$hashed_password_here';
 
       if (!isDirectMatch && !isDefaultAdminMatch) {
@@ -80,7 +130,7 @@ export async function POST(request: Request) {
 
       if (user.status === 'DISABLED') {
         return NextResponse.json(
-          { success: false, error: 'This user account has been deactivated.' },
+          { success: false, error: 'This user account has been deactivated. Please contact an administrator.' },
           { status: 403 }
         );
       }
@@ -90,33 +140,73 @@ export async function POST(request: Request) {
     }
 
     if (action === 'REGISTER') {
-      if (!name || !email || !password) {
+      if (!name || !name.trim() || !password) {
         return NextResponse.json(
-          { success: false, error: 'Name, email, and password are required' },
+          { success: false, error: 'Full name and password are required.' },
           { status: 400 }
         );
       }
 
-      const cleanEmail = email.trim().toLowerCase();
-      const [existing]: any = await pool.query('SELECT id FROM users WHERE LOWER(email) = ?', [cleanEmail]);
-      if (existing.length > 0) {
+      let parsedEmail: string | null = (email || '').trim().toLowerCase() || null;
+      let parsedPhone: string | null = (phone || '').trim() || null;
+
+      // If a single combined identifier was provided fallback
+      if (identifier && (!parsedEmail || !parsedPhone)) {
+        const cleanId = identifier.trim();
+        if (cleanId.includes('@') && !parsedEmail) {
+          parsedEmail = cleanId.toLowerCase();
+        } else if (!cleanId.includes('@') && !parsedPhone) {
+          parsedPhone = cleanId;
+        }
+      }
+
+      if (!parsedEmail || !parsedPhone) {
         return NextResponse.json(
-          { success: false, error: `Account with email "${email}" already exists` },
-          { status: 409 }
+          { success: false, error: 'Both a valid Email address and Mobile number are required.' },
+          { status: 400 }
         );
+      }
+
+      // Check for existing user with duplicate email or phone
+      if (parsedEmail) {
+        const [existingEmail]: any = await pool.query(
+          'SELECT id FROM users WHERE LOWER(email) = ?',
+          [parsedEmail]
+        );
+        if (existingEmail.length > 0) {
+          return NextResponse.json(
+            { success: false, error: `An account with email "${parsedEmail}" already exists.` },
+            { status: 409 }
+          );
+        }
+      }
+
+      if (parsedPhone) {
+        const cleanDigits = normalizePhone(parsedPhone);
+        const [existingPhone]: any = await pool.query(
+          'SELECT id FROM users WHERE phone = ? OR phone = ?',
+          [parsedPhone, cleanDigits]
+        );
+        if (existingPhone.length > 0) {
+          return NextResponse.json(
+            { success: false, error: `An account with mobile number "${parsedPhone}" already exists.` },
+            { status: 409 }
+          );
+        }
       }
 
       const id = `user-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
       await pool.query(
-        `INSERT INTO users (id, name, email, password_hash, role, status, currency, currency_symbol) 
-         VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, ?)`,
-        [id, name.trim(), cleanEmail, password, role, currency, currencySymbol]
+        `INSERT INTO users (id, name, email, phone, password_hash, role, status, currency, currency_symbol) 
+         VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?)`,
+        [id, name.trim(), parsedEmail, parsedPhone, password, role, currency, currencySymbol]
       );
 
       const newUser = {
         id,
         name: name.trim(),
-        email: cleanEmail,
+        email: parsedEmail || '',
+        phone: parsedPhone || '',
         role,
         status: 'ACTIVE',
         currency,
@@ -127,11 +217,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, user: newUser }, { status: 201 });
     }
 
-    return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Invalid action specified' }, { status: 400 });
   } catch (error: any) {
     console.error('Auth API error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Authentication error' },
+      { success: false, error: error.message || 'Authentication service error' },
       { status: 500 }
     );
   }
@@ -140,8 +230,9 @@ export async function POST(request: Request) {
 // PUT: Update user profile or status
 export async function PUT(request: Request) {
   try {
+    await ensureSchema();
     const body = await request.json();
-    const { id, name, email, password, role, status, currency, currencySymbol } = body;
+    const { id, name, email, phone, password, role, status, currency, currencySymbol } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'User ID is required' }, { status: 400 });
@@ -156,7 +247,11 @@ export async function PUT(request: Request) {
     }
     if (email !== undefined) {
       updates.push('email = ?');
-      values.push(email.trim().toLowerCase());
+      values.push(email ? email.trim().toLowerCase() : null);
+    }
+    if (phone !== undefined) {
+      updates.push('phone = ?');
+      values.push(phone ? phone.trim() : null);
     }
     if (password !== undefined) {
       updates.push('password_hash = ?');

@@ -7,6 +7,7 @@ import {
   PersonalBudget,
   PersonalProfile,
   PersonContact,
+  PersonalBook,
   TransactionType,
   DueType,
 } from './types';
@@ -39,7 +40,24 @@ export interface PersonLedger {
 
 interface PersonalContextType {
   profile: PersonalProfile;
-  updateProfile: (data: Partial<PersonalProfile>) => void;
+  updateProfile: (data: Partial<PersonalProfile>) => Promise<{ success: boolean; error?: string }>;
+
+  // Multi-Book Management
+  books: PersonalBook[];
+  currentBook: PersonalBook | null;
+  activeBookId: string;
+  switchBook: (bookId: string) => void;
+  createBook: (data: {
+    name: string;
+    description?: string;
+    currency?: string;
+    currencySymbol?: string;
+    color?: string;
+    icon?: string;
+    isDefault?: boolean;
+  }) => Promise<PersonalBook | null>;
+  updateBook: (id: string, data: Partial<PersonalBook>) => Promise<boolean>;
+  deleteBook: (id: string) => Promise<{ success: boolean; error?: string }>;
 
   // Transactions
   transactions: PersonalTransaction[];
@@ -52,6 +70,7 @@ interface PersonalContextType {
     personName?: string;
     date?: string;
     notes?: string;
+    bookId?: string;
   }) => void;
   updateTransaction: (id: string, data: Partial<PersonalTransaction>) => void;
   deleteTransaction: (id: string) => void;
@@ -74,6 +93,7 @@ interface PersonalContextType {
     amount: number;
     dueDate?: string;
     notes?: string;
+    bookId?: string;
   }) => void;
   updateDue: (id: string, data: Partial<PersonalDue>) => void;
   recordDuePayment: (dueId: string, amount: number, accountId?: string, notes?: string) => void;
@@ -101,6 +121,10 @@ interface PersonalContextType {
     totalNetWorth: number;
     totalIncome: number;
     totalExpenses: number;
+    coreIncome: number;
+    coreExpenses: number;
+    netBalanceExcludingLoans: number;
+    netBalanceAfterDues: number;
     monthlyIncome: number;
     monthlyExpenses: number;
     netSavings: number;
@@ -113,39 +137,106 @@ interface PersonalContextType {
 const PersonalContext = createContext<PersonalContextType | undefined>(undefined);
 
 export function PersonalFinanceProvider({ children }: { children: React.ReactNode }) {
-  const { currentUser } = useAuth();
+  const { currentUser, updateUserAccount } = useAuth();
   const userId = currentUser ? currentUser.id : '';
 
-  const defaultProfile: PersonalProfile = useMemo(() => {
-    if (currentUser) {
-      return {
-        name: currentUser.name,
-        email: currentUser.email,
-        currency: currentUser.currency || 'INR',
-        currencySymbol: currentUser.currencySymbol || '₹',
-      };
-    }
-    return SEED_PROFILE;
-  }, [currentUser]);
+  const [books, setBooks] = useState<PersonalBook[]>([]);
+  const [activeBookId, setActiveBookId] = useState<string>('');
+  const [rawTransactions, setRawTransactions] = useState<PersonalTransaction[]>([]);
+  const [rawDues, setRawDues] = useState<PersonalDue[]>([]);
+  const [rawContacts, setRawContacts] = useState<PersonContact[]>([]);
+  const [rawBudgets, setRawBudgets] = useState<PersonalBudget[]>([]);
 
-  const [profile, setProfile] = useState<PersonalProfile>(defaultProfile);
-  const [transactions, setTransactions] = useState<PersonalTransaction[]>([]);
-  const [dues, setDues] = useState<PersonalDue[]>([]);
-  const [contacts, setContacts] = useState<PersonContact[]>([]);
-  const [budgets, setBudgets] = useState<PersonalBudget[]>([]);
   const [expenseCategories, setExpenseCategories] = useState<string[]>(EXPENSE_CATEGORIES);
   const [incomeCategories, setIncomeCategories] = useState<string[]>(INCOME_CATEGORIES);
   const [paymentModes, setPaymentModes] = useState<string[]>(DEFAULT_PAYMENT_MODES);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Active Book Object
+  const currentBook = useMemo(() => {
+    if (!books || books.length === 0) return null;
+    if (activeBookId) {
+      const found = books.find((b) => b.id === activeBookId);
+      if (found) return found;
+    }
+    const def = books.find((b) => b.isDefault);
+    return def || books[0] || null;
+  }, [books, activeBookId]);
+
+  // Profile combined with active book currency
+  const profile: PersonalProfile = useMemo(() => {
+    const baseName = currentUser?.name || SEED_PROFILE.name;
+    const baseEmail = currentUser?.email || SEED_PROFILE.email;
+    const basePhone = currentUser?.phone || SEED_PROFILE.phone;
+
+    return {
+      name: baseName,
+      email: baseEmail,
+      phone: basePhone,
+      currency: currentBook?.currency || currentUser?.currency || 'INR',
+      currencySymbol: currentBook?.currencySymbol || currentUser?.currencySymbol || '₹',
+    };
+  }, [currentUser, currentBook]);
+
+  // Filter scoped data by active book
+  const transactions = useMemo(() => {
+    if (!currentBook) return rawTransactions;
+    return rawTransactions.filter((t) => !t.bookId || t.bookId === currentBook.id);
+  }, [rawTransactions, currentBook]);
+
+  const dues = useMemo(() => {
+    if (!currentBook) return rawDues;
+    return rawDues.filter((d) => !d.bookId || d.bookId === currentBook.id);
+  }, [rawDues, currentBook]);
+
+  const contacts = useMemo(() => {
+    if (!currentBook) return rawContacts;
+    return rawContacts.filter((c) => !c.bookId || c.bookId === currentBook.id);
+  }, [rawContacts, currentBook]);
+
+  const budgets = useMemo(() => {
+    if (!currentBook) return rawBudgets;
+    return rawBudgets.filter((b) => !b.bookId || b.bookId === currentBook.id);
+  }, [rawBudgets, currentBook]);
+
+  // Switch Active Book
+  const switchBook = useCallback((bookId: string) => {
+    setActiveBookId(bookId);
+    if (typeof window !== 'undefined' && userId) {
+      try {
+        localStorage.setItem(`finbook_active_book_${userId}`, bookId);
+      } catch {}
+    }
+  }, [userId]);
 
   // Fetch all user data from MySQL API endpoints
   const refreshData = useCallback(async () => {
     if (!currentUser || !userId) return;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-      // 1. Fetch transactions
+      // 1. Fetch Books
+      try {
+        const bookRes = await fetch(`/api/books?userId=${encodeURIComponent(userId)}`, { signal: controller.signal });
+        const bookJson = await bookRes.json();
+        if (bookJson.success && Array.isArray(bookJson.data) && bookJson.data.length > 0) {
+          setBooks(bookJson.data);
+
+          // Restore saved active book
+          const savedBookId = typeof window !== 'undefined' ? localStorage.getItem(`finbook_active_book_${userId}`) : null;
+          if (savedBookId && bookJson.data.some((b: PersonalBook) => b.id === savedBookId)) {
+            setActiveBookId(savedBookId);
+          } else {
+            const defBook = bookJson.data.find((b: PersonalBook) => b.isDefault) || bookJson.data[0];
+            setActiveBookId(defBook.id);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch books', err);
+      }
+
+      // 2. Fetch transactions
       fetch(`/api/transactions?userId=${encodeURIComponent(userId)}`, { signal: controller.signal })
         .then((res) => res.json())
         .then((json) => {
@@ -154,12 +245,12 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
               ...t,
               amount: Number(t.amount) || 0,
             }));
-            setTransactions(sanitized);
+            setRawTransactions(sanitized);
           }
         })
         .catch(() => {});
 
-      // 2. Fetch dues
+      // 3. Fetch dues
       fetch(`/api/dues?userId=${encodeURIComponent(userId)}`, { signal: controller.signal })
         .then((res) => res.json())
         .then((json) => {
@@ -178,24 +269,24 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
                 remainingAmount: remaining,
               };
             });
-            setDues(sanitized);
+            setRawDues(sanitized);
           }
         })
         .catch(() => {});
 
-      // 3. Fetch budgets
+      // 4. Fetch budgets
       fetch(`/api/budgets?userId=${encodeURIComponent(userId)}`, { signal: controller.signal })
         .then((res) => res.json())
         .then((json) => {
-          if (json.success && Array.isArray(json.data) && json.data.length > 0) setBudgets(json.data);
+          if (json.success && Array.isArray(json.data) && json.data.length > 0) setRawBudgets(json.data);
         })
         .catch(() => {});
 
-      // 4. Fetch contacts
+      // 5. Fetch contacts
       fetch(`/api/contacts?userId=${encodeURIComponent(userId)}`, { signal: controller.signal })
         .then((res) => res.json())
         .then((json) => {
-          if (json.success && Array.isArray(json.data)) setContacts(json.data);
+          if (json.success && Array.isArray(json.data)) setRawContacts(json.data);
         })
         .catch(() => {})
         .finally(() => clearTimeout(timeoutId));
@@ -207,15 +298,97 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
   // Load from MySQL when currentUser/userId changes
   useEffect(() => {
     if (currentUser) {
-      setProfile({
-        name: currentUser.name,
-        email: currentUser.email,
-        currency: currentUser.currency || 'INR',
-        currencySymbol: currentUser.currencySymbol || '₹',
-      });
       refreshData();
     }
   }, [currentUser, userId, refreshData]);
+
+  // Create Book
+  const createBook = async (data: {
+    name: string;
+    description?: string;
+    currency?: string;
+    currencySymbol?: string;
+    color?: string;
+    icon?: string;
+    isDefault?: boolean;
+  }): Promise<PersonalBook | null> => {
+    if (!userId) return null;
+    try {
+      const res = await fetch('/api/books', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          name: data.name,
+          description: data.description,
+          currency: data.currency || profile.currency || 'INR',
+          currencySymbol: data.currencySymbol || profile.currencySymbol || '₹',
+          color: data.color || '#2563eb',
+          icon: data.icon || 'BookOpen',
+          isDefault: data.isDefault || false,
+        }),
+      });
+      const json = await res.json();
+      if (json.success && json.data) {
+        const newB: PersonalBook = json.data;
+        setBooks((prev) => [newB, ...prev]);
+        switchBook(newB.id);
+        return newB;
+      }
+      return null;
+    } catch (err) {
+      console.error('Error creating book:', err);
+      return null;
+    }
+  };
+
+  // Update Book
+  const updateBook = async (id: string, data: Partial<PersonalBook>): Promise<boolean> => {
+    if (!userId) return false;
+    try {
+      setBooks((prev) => prev.map((b) => (b.id === id ? { ...b, ...data } : b)));
+      const res = await fetch('/api/books', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, userId, ...data }),
+      });
+      const json = await res.json();
+      return Boolean(json.success);
+    } catch (err) {
+      console.error('Error updating book:', err);
+      return false;
+    }
+  };
+
+  // Delete Book
+  const deleteBook = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    if (!userId) return { success: false, error: 'User not authenticated' };
+    if (books.length <= 1) {
+      return { success: false, error: 'Cannot delete your only remaining book.' };
+    }
+    try {
+      const res = await fetch(`/api/books?id=${encodeURIComponent(id)}&userId=${encodeURIComponent(userId)}`, {
+        method: 'DELETE',
+      });
+      const json = await res.json();
+      if (json.success) {
+        setBooks((prev) => prev.filter((b) => b.id !== id));
+        setRawTransactions((prev) => prev.filter((t) => t.bookId !== id));
+        setRawDues((prev) => prev.filter((d) => d.bookId !== id));
+        setRawBudgets((prev) => prev.filter((b) => b.bookId !== id));
+        setRawContacts((prev) => prev.filter((c) => c.bookId !== id));
+
+        const remaining = books.filter((b) => b.id !== id);
+        if (remaining.length > 0) {
+          switchBook(remaining[0].id);
+        }
+        return { success: true };
+      }
+      return { success: false, error: json.error || 'Failed to delete book' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Failed to delete book' };
+    }
+  };
 
   const addCategory = (type: 'EXPENSE' | 'INCOME', categoryName: string): string => {
     const trimmed = categoryName.trim();
@@ -235,8 +408,18 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     return trimmed;
   };
 
-  const updateProfile = (data: Partial<PersonalProfile>) => {
-    setProfile((prev) => ({ ...prev, ...data }));
+  const updateProfile = async (data: Partial<PersonalProfile>): Promise<{ success: boolean; error?: string }> => {
+    if (currentUser && currentUser.id) {
+      const res = await updateUserAccount(currentUser.id, {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        currency: data.currency,
+        currencySymbol: data.currencySymbol,
+      });
+      return res;
+    }
+    return { success: true };
   };
 
   // Contacts
@@ -263,6 +446,8 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
 
     const newContact: PersonContact = {
       id: `contact-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      userId,
+      bookId: currentBook?.id,
       name: trimmedName,
       phone: phone?.trim(),
       notes: notes?.trim(),
@@ -270,7 +455,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     };
 
     // Optimistic UI update
-    setContacts((prev) => [newContact, ...prev]);
+    setRawContacts((prev) => [newContact, ...prev]);
 
     // Async MySQL insert
     fetch('/api/contacts', {
@@ -279,6 +464,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
       body: JSON.stringify({
         id: newContact.id,
         userId,
+        bookId: currentBook?.id,
         name: newContact.name,
         phone: newContact.phone,
         notes: newContact.notes,
@@ -289,7 +475,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
   };
 
   const updateContact = (id: string, data: Partial<PersonContact>) => {
-    setContacts((prev) => prev.map((c) => (c.id === id ? { ...c, ...data } : c)));
+    setRawContacts((prev) => prev.map((c) => (c.id === id ? { ...c, ...data } : c)));
 
     fetch('/api/contacts', {
       method: 'PUT',
@@ -300,9 +486,9 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
 
   const deleteContact = (id: string, deleteAssociatedDues: boolean = true) => {
     const contact = contacts.find((c: PersonContact) => c.id === id);
-    setContacts((prev: PersonContact[]) => prev.filter((c: PersonContact) => c.id !== id));
+    setRawContacts((prev: PersonContact[]) => prev.filter((c: PersonContact) => c.id !== id));
     if (deleteAssociatedDues && contact) {
-      setDues((prev: PersonalDue[]) =>
+      setRawDues((prev: PersonalDue[]) =>
         prev.filter((d: PersonalDue) => d.personId !== id && d.personName.toLowerCase() !== contact.name.toLowerCase())
       );
     }
@@ -387,10 +573,14 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     personName?: string;
     date?: string;
     notes?: string;
+    bookId?: string;
   }) => {
     const rounded = round2(tx.amount);
+    const targetBookId = tx.bookId || currentBook?.id;
     const newTx: PersonalTransaction = {
       id: `tx-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      userId,
+      bookId: targetBookId,
       date: tx.date || new Date().toISOString().split('T')[0],
       type: tx.type,
       category: tx.category,
@@ -403,7 +593,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     };
 
     // Optimistic UI update
-    setTransactions((prev) => [newTx, ...prev]);
+    setRawTransactions((prev) => [newTx, ...prev]);
 
     // Async MySQL insert
     fetch('/api/transactions', {
@@ -412,12 +602,13 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
       body: JSON.stringify({
         ...newTx,
         userId,
+        bookId: targetBookId,
       }),
     }).catch((err) => console.error('Failed to sync transaction to MySQL', err));
   };
 
   const updateTransaction = (id: string, data: Partial<PersonalTransaction>) => {
-    setTransactions((prev) =>
+    setRawTransactions((prev) =>
       prev.map((t) => (t.id === id ? { ...t, ...data, amount: data.amount !== undefined ? round2(data.amount) : t.amount } : t))
     );
 
@@ -434,7 +625,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
   };
 
   const deleteTransaction = (id: string) => {
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
+    setRawTransactions((prev) => prev.filter((t) => t.id !== id));
 
     fetch(`/api/transactions?id=${encodeURIComponent(id)}&userId=${encodeURIComponent(userId)}`, {
       method: 'DELETE',
@@ -450,15 +641,19 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     amount: number;
     dueDate?: string;
     notes?: string;
+    bookId?: string;
   }) => {
     const rounded = round2(due.amount);
     const currentDate = new Date().toISOString().split('T')[0];
+    const targetBookId = due.bookId || currentBook?.id;
     const contact = due.personId
       ? contacts.find((c) => c.id === due.personId) || getOrCreateContact(due.personName, due.phone)
       : getOrCreateContact(due.personName, due.phone);
 
     const newDue: PersonalDue = {
       id: `due-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      userId,
+      bookId: targetBookId,
       personId: contact.id,
       personName: contact.name,
       phone: contact.phone || due.phone,
@@ -473,7 +668,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     };
 
     // Optimistic UI update
-    setDues((prev) => [newDue, ...prev]);
+    setRawDues((prev) => [newDue, ...prev]);
 
     // Async MySQL insert
     fetch('/api/dues', {
@@ -482,6 +677,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
       body: JSON.stringify({
         ...newDue,
         userId,
+        bookId: targetBookId,
       }),
     }).catch((err) => console.error('Failed to sync due to MySQL', err));
 
@@ -494,6 +690,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
       personId: contact.id,
       personName: contact.name,
       date: currentDate,
+      bookId: targetBookId,
       notes: isLent
         ? `Loan given to ${contact.name}${due.notes ? ` (${due.notes})` : ''}`
         : `Loan borrowed from ${contact.name}${due.notes ? ` (${due.notes})` : ''}`,
@@ -511,7 +708,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     const currentDate = new Date().toISOString().split('T')[0];
 
     // Optimistic UI update
-    setDues((prev) =>
+    setRawDues((prev) =>
       prev.map((d) =>
         d.id === dueId
           ? {
@@ -544,6 +741,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
       personId: targetDue.personId,
       personName: targetDue.personName,
       date: currentDate,
+      bookId: targetDue.bookId || currentBook?.id,
       notes: isLent
         ? `Repayment received from ${targetDue.personName}${notes ? ` (${notes})` : ''}`
         : `Repayment paid to ${targetDue.personName}${notes ? ` (${notes})` : ''}`,
@@ -551,7 +749,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
   };
 
   const updateDue = (id: string, data: Partial<PersonalDue>) => {
-    setDues((prev) =>
+    setRawDues((prev) =>
       prev.map((d) => {
         if (d.id !== id) return d;
         const updated = { ...d, ...data };
@@ -579,7 +777,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
   };
 
   const deleteDue = (id: string) => {
-    setDues((prev) => prev.filter((d) => d.id !== id));
+    setRawDues((prev) => prev.filter((d) => d.id !== id));
 
     fetch(`/api/dues?id=${encodeURIComponent(id)}`, { method: 'DELETE' }).catch((err) =>
       console.error('Failed to delete due in MySQL', err)
@@ -589,12 +787,13 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
   // Budgets
   const updateBudgetLimit = (category: string, monthlyLimit: number) => {
     const limit = round2(monthlyLimit);
-    setBudgets((prev) => {
-      const existing = prev.find((b) => b.category === category);
+    const targetBookId = currentBook?.id;
+    setRawBudgets((prev) => {
+      const existing = prev.find((b) => b.category === category && (!b.bookId || b.bookId === targetBookId));
       if (existing) {
-        return prev.map((b) => (b.category === category ? { ...b, monthlyLimit: limit } : b));
+        return prev.map((b) => (b.id === existing.id ? { ...b, monthlyLimit: limit } : b));
       }
-      return [...prev, { id: `bg-${Date.now()}`, category, monthlyLimit: limit }];
+      return [...prev, { id: `bg-${Date.now()}`, userId, bookId: targetBookId, category, monthlyLimit: limit }];
     });
 
     fetch('/api/budgets', {
@@ -602,6 +801,7 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         userId,
+        bookId: targetBookId,
         category,
         monthlyLimit: limit,
       }),
@@ -610,11 +810,10 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
 
   const resetAllData = () => {
     const freshTx = generateSeedTransactions();
-    setProfile(SEED_PROFILE);
-    setTransactions(freshTx);
-    setDues(SEED_DUES);
-    setContacts(SEED_CONTACTS);
-    setBudgets(SEED_BUDGETS);
+    setRawTransactions(freshTx);
+    setRawDues(SEED_DUES);
+    setRawContacts(SEED_CONTACTS);
+    setRawBudgets(SEED_BUDGETS);
     setExpenseCategories(EXPENSE_CATEGORIES);
     setIncomeCategories(INCOME_CATEGORIES);
     setPaymentModes(DEFAULT_PAYMENT_MODES);
@@ -641,6 +840,17 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     const netSavings = round2(monthlyIncome - monthlyExpenses);
     const savingsRate = monthlyIncome > 0 ? Math.round((netSavings / monthlyIncome) * 100) : 0;
 
+    const isLoanTx = (t: PersonalTransaction) => {
+      const cat = (t.category || '').toLowerCase();
+      return (
+        cat.includes('loan') ||
+        cat.includes('borrow') ||
+        cat.includes('lent') ||
+        cat.includes('repay') ||
+        Boolean(t.personId)
+      );
+    };
+
     const allIncome = transactions
       .filter((t) => t.type === 'INCOME')
       .reduce((sum, t) => sum + Number(t.amount || 0), 0);
@@ -648,6 +858,16 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
     const allExpenses = transactions
       .filter((t) => t.type === 'EXPENSE')
       .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+    const coreIncome = transactions
+      .filter((t) => t.type === 'INCOME' && !isLoanTx(t))
+      .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+    const coreExpenses = transactions
+      .filter((t) => t.type === 'EXPENSE' && !isLoanTx(t))
+      .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+    const netBalanceExcludingLoans = round2(coreIncome - coreExpenses);
 
     const totalNetWorth = round2(allIncome - allExpenses);
     const totalSavings = totalNetWorth;
@@ -675,10 +895,16 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
         return sum + rem;
       }, 0);
 
+    const netBalanceAfterDues = round2(totalNetWorth + totalLent - totalBorrowed);
+
     return {
       totalNetWorth,
       totalIncome: round2(allIncome),
       totalExpenses: round2(allExpenses),
+      coreIncome: round2(coreIncome),
+      coreExpenses: round2(coreExpenses),
+      netBalanceExcludingLoans,
+      netBalanceAfterDues,
       monthlyIncome: round2(monthlyIncome),
       monthlyExpenses: round2(monthlyExpenses),
       netSavings: totalSavings,
@@ -693,6 +919,13 @@ export function PersonalFinanceProvider({ children }: { children: React.ReactNod
       value={{
         profile,
         updateProfile,
+        books,
+        currentBook,
+        activeBookId,
+        switchBook,
+        createBook,
+        updateBook,
+        deleteBook,
         transactions,
         addTransaction,
         updateTransaction,

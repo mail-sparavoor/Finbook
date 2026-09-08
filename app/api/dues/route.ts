@@ -1,18 +1,22 @@
 import { NextResponse } from 'next/server';
 import { pool } from '@/lib/db';
+import { ensureBooksSchema } from '@/lib/books-schema';
 
 export const dynamic = 'force-dynamic';
 
-// GET: Fetch dues for a user
+// GET: Fetch dues for a user (and optional bookId)
 export async function GET(request: Request) {
   try {
+    await ensureBooksSchema();
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId') || 'user-sample';
+    const bookId = searchParams.get('bookId');
 
-    const [rows]: any = await pool.query(
-      `SELECT 
+    let query = `
+      SELECT 
         id, 
         user_id as userId, 
+        book_id as bookId,
         person_id as personId, 
         person_name as personName, 
         phone, 
@@ -24,10 +28,17 @@ export async function GET(request: Request) {
         notes, 
         created_at as createdAt 
        FROM dues 
-       WHERE user_id = ? 
-       ORDER BY due_date ASC, created_at DESC`,
-      [userId]
-    );
+       WHERE user_id = ?`;
+    const params: any[] = [userId];
+
+    if (bookId) {
+      query += ` AND (book_id = ? OR book_id IS NULL)`;
+      params.push(bookId);
+    }
+
+    query += ` ORDER BY due_date ASC, created_at DESC`;
+
+    const [rows]: any = await pool.query(query, params);
 
     const formattedRows = rows.map((r: any) => {
       const orig = Number(r.originalAmount) || 0;
@@ -36,6 +47,7 @@ export async function GET(request: Request) {
       return {
         id: r.id,
         userId: r.userId,
+        bookId: r.bookId,
         personId: r.personId,
         personName: r.personName,
         phone: r.phone,
@@ -63,10 +75,12 @@ export async function GET(request: Request) {
 // POST: Create a new due
 export async function POST(request: Request) {
   try {
+    await ensureBooksSchema();
     const body = await request.json();
     const {
       id = `due-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       userId = 'user-sample',
+      bookId = null,
       personId = null,
       personName,
       phone = null,
@@ -90,14 +104,15 @@ export async function POST(request: Request) {
 
     await pool.query(
       `INSERT INTO dues 
-        (id, user_id, person_id, person_name, phone, type, original_amount, paid_amount, due_date, status, notes) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, userId, personId, personName, phone, type, orig, paid, dueDate, status, notes]
+        (id, user_id, book_id, person_id, person_name, phone, type, original_amount, paid_amount, due_date, status, notes) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, userId, bookId, personId, personName, phone, type, orig, paid, dueDate, status, notes]
     );
 
     const newDue = {
       id,
       userId,
+      bookId,
       personId,
       personName,
       phone,
@@ -124,9 +139,11 @@ export async function POST(request: Request) {
 // PUT: Update an existing due
 export async function PUT(request: Request) {
   try {
+    await ensureBooksSchema();
     const body = await request.json();
     const {
       id,
+      bookId,
       personId,
       personName,
       phone,
@@ -145,6 +162,10 @@ export async function PUT(request: Request) {
     const updates: string[] = [];
     const values: any[] = [];
 
+    if (bookId !== undefined) {
+      updates.push('book_id = ?');
+      values.push(bookId);
+    }
     if (personId !== undefined) {
       updates.push('person_id = ?');
       values.push(personId);
@@ -197,13 +218,13 @@ export async function PUT(request: Request) {
       `SELECT 
         id, 
         user_id as userId, 
+        book_id as bookId,
         person_id as personId, 
         person_name as personName, 
         phone, 
         type, 
         CAST(original_amount AS DECIMAL(10,2)) as originalAmount, 
         CAST(paid_amount AS DECIMAL(10,2)) as paidAmount, 
-        CAST(remaining_amount AS DECIMAL(10,2)) as remainingAmount, 
         DATE_FORMAT(due_date, '%Y-%m-%d') as dueDate, 
         status, 
         notes, 
